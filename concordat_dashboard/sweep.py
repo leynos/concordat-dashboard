@@ -9,8 +9,10 @@ import functools
 import logging
 import pathlib
 import tempfile
+import time
 import typing as typ
 
+from . import model
 from .catalogue import discover_rules, exemptions_by_repository
 from .checkout import checkout_tree, local_ref, origin_url
 from .classify import RawFinding, derive_cell
@@ -142,7 +144,7 @@ def _failed_result(name: str, config: SweepConfig, reason: str) -> RepoResult:
     """
     unproven = (Finding("ERROR", "", 0, public_reason(reason)),)
     cells = {r.id: Cell(State.INDETERMINATE, unproven=unproven) for r in config.rules}
-    return RepoResult(name, "unknown", frozenset(), cells)
+    return RepoResult(name, model.UNFETCHED, frozenset(), cells)
 
 
 def sweep_repository(name: str, config: SweepConfig) -> RepoResult:
@@ -246,17 +248,28 @@ def collect(
     return tuple(sorted(results, key=lambda r: r.name))
 
 
-def log_outcome(repos: tuple[RepoResult, ...], elapsed: dt.timedelta) -> None:
-    """Log how long the sweep took and how its marks came out.
+class SweepDegradedError(RuntimeError):
+    """Every repository failed to sweep, so there is nothing worth publishing."""
 
-    Counts only: nothing here names a repository.
+
+def log_outcome(repos: tuple[RepoResult, ...], elapsed: float) -> None:
+    """Log how long the sweep took, how its marks came out, and what failed.
+
+    Counts only: nothing here names a repository. A partly degraded run (some
+    repositories could not be fetched) is published with a warning; a fully
+    degraded run is an error, so the workflow fails and the previous page stays.
 
     Parameters
     ----------
     repos
         The swept repositories.
     elapsed
-        How long the sweep took.
+        How long the sweep took, in seconds.
+
+    Raises
+    ------
+    SweepDegradedError
+        If there were repositories and every one of them failed.
     """
     totals = collections.Counter(
         cell.state.value for repo in repos for cell in repo.cells.values()
@@ -264,9 +277,15 @@ def log_outcome(repos: tuple[RepoResult, ...], elapsed: dt.timedelta) -> None:
     LOG.info(
         "swept %d repositories in %.0fs: %s",
         len(repos),
-        elapsed.total_seconds(),
+        elapsed,
         ", ".join(f"{count} {state}" for state, count in sorted(totals.items())),
     )
+    failed = sum(1 for repo in repos if repo.sha == model.UNFETCHED)
+    if failed:
+        LOG.warning("DEGRADED: %d of %d repositories failed", failed, len(repos))
+    if repos and failed == len(repos):
+        message = f"all {failed} repositories failed to sweep"
+        raise SweepDegradedError(message)
 
 
 def run_sweep(
@@ -291,17 +310,17 @@ def run_sweep(
     Returns
     -------
     Sweep
-        All results, rows in name order.
+        All results, rows in name order; a run in which every repository
+        failed raises `SweepDegradedError` instead.
     """
-    started = clock()
+    started = time.monotonic()
     with cf.ProcessPoolExecutor(max_workers=workers) as pool:
         repos = collect(pool, estate.names, config)
-    finished = clock()
-    log_outcome(repos, finished - started)
+    log_outcome(repos, time.monotonic() - started)
     version, commit = concordat_identity()
     return Sweep(
         owner=config.owner,
-        generated_at=finished.isoformat(timespec="seconds"),
+        generated_at=clock().isoformat(timespec="seconds"),
         concordat_version=version,
         concordat_commit=commit,
         rules=config.rules,

@@ -4,6 +4,7 @@ import dataclasses
 import typing as typ
 
 from .marks import label_for
+from .model import UNFETCHED
 
 if typ.TYPE_CHECKING:
     from .model import Cell, Finding, RepoResult, RuleInfo, Sweep
@@ -98,7 +99,7 @@ def page_of(repo: RepoResult, sweep: Sweep) -> RepoPage:
         The view model.
     """
     url = f"{GITHUB}/{sweep.owner}/{repo.name}"
-    known = repo.sha != "unknown"
+    known = repo.sha != UNFETCHED
     return RepoPage(
         name=repo.name,
         url=url,

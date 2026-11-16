@@ -32,6 +32,8 @@ rendering can be re-run without sweeping again.
 | `estate`    | Repository listing and exclusion counts                    |
 | `checkout`  | Default-branch checkout with the right `origin`            |
 | `traits`    | Rust, Python and uv detection                              |
+| `process`   | The `git` and `gh` allowlist, deadlines, safe summaries    |
+| `redact`    | Strips credentials from text before it is logged           |
 | `runner`    | In-process concordat runner with a shared certifier        |
 | `classify`  | The five-state decision and the unproven-finding rule      |
 | `sweep`     | Orchestration across a process pool                        |
@@ -69,6 +71,15 @@ from its `repr`) to the per-process runner, and is never logged. Every `git` and
 `gh` call has a deadline (`DEADLINE_SECONDS`), so a stalled fetch becomes one
 repository's indeterminate row instead of holding the sweep. A repository
 listing that reaches its cap is rejected rather than published as complete.
+
+### Degraded runs
+
+A repository that cannot be fetched shows as a row of indeterminate marks, and
+the run logs `DEGRADED: n of m repositories failed`. A partly degraded run is
+still published, because the other rows are sound and each failed row says why.
+A fully degraded run (every repository failed) raises `SweepDegradedError`, so
+the workflow's build job fails, the deploy job never runs, and the previous
+page stays in place. Elapsed time is measured with a monotonic clock.
 
 ## Styling
 

@@ -31,6 +31,19 @@ def test_runs_on_a_schedule_and_on_demand(workflow: dict[str, typ.Any]) -> None:
     assert "pull_request" not in triggers, "a pull request must not deploy"
 
 
+def test_the_build_sweeps_github_renders_and_uploads_the_site_directory(
+    workflow: dict[str, typ.Any],
+) -> None:
+    """The cron, the sweep command and the uploaded path are part of the contract."""
+    triggers = typ.cast("dict[bool, typ.Any]", workflow)[True]
+    steps = workflow["jobs"]["build"]["steps"]
+    commands = [step.get("run", "") for step in steps]
+    uploads = [s for s in steps if s.get("uses", "").startswith("actions/upload-pages")]
+    assert triggers["schedule"] == [{"cron": "17 4 * * *"}], "daily at 04:17 UTC"
+    assert any("make site LOCAL_ROOT=" in c for c in commands), "sweeps from GitHub"
+    assert [u["with"]["path"] for u in uploads] == ["site"], "uploads the site only"
+
+
 def test_default_token_is_read_only_and_only_deploy_can_write_pages(
     workflow: dict[str, typ.Any],
 ) -> None:

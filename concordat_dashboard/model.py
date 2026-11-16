@@ -12,6 +12,10 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
 
+# The commit recorded for a repository that could not be fetched.
+UNFETCHED = "unknown"
+
+
 class State(enum.StrEnum):
     """What one repository's mark for one rule means."""
 

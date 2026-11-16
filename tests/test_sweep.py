@@ -4,6 +4,7 @@ import concurrent.futures as cf
 import dataclasses
 import datetime as dt
 import pathlib
+import re
 import typing as typ
 
 import pytest
@@ -17,7 +18,9 @@ from concordat_dashboard.model import Excluded, Exemption, RuleInfo, State, Trai
 from concordat_dashboard.sweep import (
     Locations,
     SweepConfig,
+    SweepDegradedError,
     build_config,
+    log_outcome,
     run_sweep,
     sweep_repository,
 )
@@ -211,8 +214,22 @@ def test_run_sweep_uses_the_injected_clock_and_keeps_the_estate_counts(
     assert swept.excluded == Excluded(2, 1, 7, 3), "exclusions pass through"
     assert [r.name for r in swept.repos] == ["demo", "zzz-ghost"], "name order"
     assert len(swept.concordat_commit) == 40, "the pinned commit is recorded"
-    assert "swept 2 repositories in 0s" in caplog.text, "a closing summary is logged"
+    assert re.search(r"swept 2 repositories in \d+s", caplog.text), "closing summary"
     assert "noncompliant" in caplog.text, "the summary counts the marks"
+    assert "DEGRADED: 1 of 2 repositories failed" in caplog.text, "a partial failure"
+
+
+def test_a_fully_degraded_run_is_an_error_and_a_partial_one_is_not(
+    clone: pathlib.Path,
+) -> None:
+    """When nothing could be swept there is nothing to publish; the page stays."""
+    config = _config(clone.parent)
+    ghost = sweep_repository("ghost", config)
+    good = sweep_repository("demo", config)
+    with pytest.raises(SweepDegradedError, match="all 1 repositories"):
+        log_outcome((ghost,), 1.0)
+    log_outcome((ghost, good), 1.0)
+    log_outcome((), 0.0)
 
 
 @pytest.mark.usefixtures("in_process_pool")
