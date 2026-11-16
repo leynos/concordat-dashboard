@@ -14,6 +14,12 @@ if typ.TYPE_CHECKING:
     import pathlib
 
 GITHUB = "https://github.com"
+LOW_SPEED = (
+    "-c",
+    "http.lowSpeedLimit=1000",
+    "-c",
+    "http.lowSpeedTime=60",
+)
 SKIP_LFS = (
     "-c",
     "filter.lfs.process=",
@@ -65,7 +71,9 @@ def materialize(source: str, ref: str, dest: pathlib.Path) -> str:
         The commit SHA now checked out.
     """
     git_in(dest, "init", "--quiet")
-    git_in(dest, "fetch", "--quiet", "--depth", "1", source, ref)
+    # Git abandons a transfer that stalls, so a dead connection ends here rather
+    # than at the process deadline (which then only backstops it).
+    git_in(dest, *LOW_SPEED, "fetch", "--quiet", "--depth", "1", source, ref)
     # The rules read text, so an LFS pointer is as good as its content, and a
     # runner without git-lfs (or a repository whose LFS objects are gone) must
     # not fail the checkout.

@@ -56,6 +56,7 @@ def test_sweep_persists_what_the_sweep_returns(
     everything = Estate(("plain", "rusty"), Excluded(0, 0, None))
     monkeypatch.setattr(cli, "list_estate", lambda *_args: everything)
     monkeypatch.setattr(cli, "build_config", lambda *_args: None)
+    monkeypatch.setattr(cli, "github_token", lambda: None)
     monkeypatch.setattr(cli, "run_sweep", run)
     out = tmp_path / "nested" / "sweep.json"
     cli.app(["sweep", str(out), "--only", "rusty"], result_action="return_value")

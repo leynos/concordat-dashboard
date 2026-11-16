@@ -75,8 +75,10 @@ def test_every_action_is_pinned_to_a_full_commit_sha(
     assert not unpinned, f"actions not pinned to a full SHA: {unpinned}"
 
 
-def test_no_secret_or_self_hosted_runner_is_referenced() -> None:
+def test_no_secret_is_referenced_and_both_jobs_run_on_github_hosted_runners(
+    workflow: dict[str, typ.Any],
+) -> None:
     """The sweep needs only the built-in token, on GitHub-hosted runners."""
-    text = WORKFLOW.read_text("utf-8")
-    assert "secrets." not in text, "no repository secret may be referenced"
-    assert "ubicloud" not in text, "the sweep runs on GitHub-hosted runners"
+    labels = {name: job["runs-on"] for name, job in workflow["jobs"].items()}
+    assert "secrets." not in WORKFLOW.read_text("utf-8"), "no secret may be referenced"
+    assert labels == {"build": "ubuntu-latest", "deploy": "ubuntu-latest"}, labels

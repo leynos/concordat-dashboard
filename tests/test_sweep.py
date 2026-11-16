@@ -250,6 +250,7 @@ def test_cli_sweep_then_render_publishes_the_finding_text(
         lambda _owner, hidden: classify_repositories([row], hidden),
     )
     monkeypatch.setattr(cli, "build_config", lambda *_args: _config(clone.parent))
+    monkeypatch.setattr(cli, "github_token", lambda: None)
     sweep_file, site = tmp_path / "sweep.json", tmp_path / "site"
     cli.app(
         ["sweep", str(sweep_file), "--hidden-private", "11"],

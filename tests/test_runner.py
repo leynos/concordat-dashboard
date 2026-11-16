@@ -41,6 +41,27 @@ def test_operational_failure_becomes_one_indeterminate_finding(
     assert "private" not in caplog.text, "the exception text is not logged either"
 
 
+def test_a_missing_gh_binary_means_no_token_not_a_crash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without `gh` the rules that need the API degrade; the sweep still runs."""
+
+    def no_gh(*_args: str) -> str:
+        """Fail as a missing executable does.
+
+        Raises
+        ------
+        FileNotFoundError
+            Always.
+        """
+        raise FileNotFoundError
+
+    for name in ("GITHUB_TOKEN", "GH_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(runner_module, "gh", no_gh)
+    assert runner_module.github_token() is None, "no token, no crash"
+
+
 @pytest.mark.parametrize(
     ("environment", "expected"),
     [

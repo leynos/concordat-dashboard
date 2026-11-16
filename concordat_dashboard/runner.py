@@ -55,7 +55,8 @@ def github_token() -> str | None:
         return token
     try:
         return gh("auth", "token").strip() or None
-    except CommandFailedError:
+    except CommandFailedError, OSError:
+        # No `gh` login, or no `gh` at all: the rules degrade to indeterminate.
         return None
 
 
