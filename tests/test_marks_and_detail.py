@@ -3,7 +3,7 @@
 import typing as typ
 
 from concordat_dashboard.detail import page_of
-from concordat_dashboard.marks import mark_for
+from concordat_dashboard.marks import TITLE_DETAIL_LIMIT, mark_for
 from concordat_dashboard.model import Cell, Exemption, Finding, RepoResult, State
 
 if typ.TYPE_CHECKING:
@@ -45,6 +45,14 @@ def test_title_carries_repository_rule_state_and_first_finding(sweep: Sweep) -> 
     start = "demo / dependabot-update-shape: non-compliant, 1 finding"
     assert title.startswith(start), "the title names the repository, rule and state"
     assert title.endswith("a finding message"), "the first finding follows the state"
+
+
+def test_long_finding_text_is_truncated_in_the_title(sweep: Sweep) -> None:
+    """A tooltip is a glance; the full text is on the detail page."""
+    long_finding = Finding("X-1", "f", 1, "w" * (TITLE_DETAIL_LIMIT + 50))
+    title = mark_for("d", _rule(sweep), Cell(State.NONCOMPLIANT, (long_finding,))).title
+    assert title.endswith("w" * TITLE_DETAIL_LIMIT), "the detail is kept to the limit"
+    assert "w" * (TITLE_DETAIL_LIMIT + 1) not in title, "and no longer than that"
 
 
 def test_title_for_an_exemption_quotes_the_rationale(sweep: Sweep) -> None:

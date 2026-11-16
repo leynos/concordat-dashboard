@@ -12,7 +12,7 @@ import typing as typ
 
 from .catalogue import discover_rules, exemptions_by_repository
 from .checkout import checkout_tree, local_ref, origin_url
-from .classify import derive_cell
+from .classify import RawFinding, derive_cell
 from .model import Cell, Exemption, Finding, RepoResult, RuleInfo, State, Sweep
 from .process import CommandFailedError
 from .redact import public_reason
@@ -44,6 +44,29 @@ class Locations:
     keep_trees: bool = False
 
 
+class RuleRunner(typ.Protocol):
+    """Runs one rule against one checkout."""
+
+    def run(self, rule_id: str, tree: pathlib.Path) -> tuple[RawFinding, ...]:
+        """Return the rule's findings for the checkout."""
+        ...
+
+
+type RunnerFactory = cabc.Callable[[pathlib.Path, str | None], RuleRunner]
+
+
+@functools.cache
+def shared_runner(pin_cache_dir: pathlib.Path, token: str | None) -> Runner:
+    """Build one runner per worker process, so certification is shared.
+
+    Returns
+    -------
+    Runner
+        The process's runner.
+    """
+    return Runner(pin_cache_dir, token)
+
+
 @dataclasses.dataclass(frozen=True, slots=True)
 class SweepConfig:
     """Everything a worker needs to sweep one repository."""
@@ -54,18 +77,8 @@ class SweepConfig:
     locations: Locations
     # Never shown in a repr or a log line.
     token: str | None = dataclasses.field(default=None, repr=False)
-
-
-@functools.cache
-def _runner(pin_cache_dir: pathlib.Path, token: str | None) -> Runner:
-    """Build one runner per worker process, so certification is shared.
-
-    Returns
-    -------
-    Runner
-        The process's runner.
-    """
-    return Runner(pin_cache_dir, token)
+    # Injectable so a test needs no rule package or network.
+    runner_factory: RunnerFactory = shared_runner
 
 
 @contextlib.contextmanager
@@ -147,7 +160,7 @@ def sweep_repository(name: str, config: SweepConfig) -> RepoResult:
         One cell per rule. A repository that cannot be fetched comes back with
         every cell indeterminate and the reason, rather than failing the sweep.
     """
-    runner = _runner(config.locations.pin_cache_dir, config.token)
+    runner = config.runner_factory(config.locations.pin_cache_dir, config.token)
     try:
         with _tree_dir(config) as dest:
             sha = checkout_tree(config.owner, name, _source(name, config), dest)
@@ -161,18 +174,16 @@ def sweep_repository(name: str, config: SweepConfig) -> RepoResult:
                 for rule in config.rules
             }
     except CommandFailedError as error:
-        # The page gets the summary only; the detail (scrubbed) goes to the log.
-        LOG.warning("%s: %s", name, public_reason(str(error)))
-        return _failed_result(
-            name, config, f"the checkout failed: {error.public_summary}"
-        )
+        # Page and log alike get the summary only: the command's own output
+        # could name something that must not be published.
+        reason = f"the checkout failed: {error.public_summary}"
+        LOG.warning("%s: %s", name, public_reason(reason))
+        return _failed_result(name, config, reason)
     except OSError as error:
         # An unreadable file in one repository must not stop the estate sweep.
-        LOG.warning("%s: %s", name, public_reason(str(error)))
-        kind = type(error).__name__
-        return _failed_result(
-            name, config, f"the repository could not be read ({kind})"
-        )
+        reason = f"the repository could not be read ({type(error).__name__})"
+        LOG.warning("%s: %s", name, public_reason(reason))
+        return _failed_result(name, config, reason)
     return RepoResult(name, sha, traits, cells)
 
 

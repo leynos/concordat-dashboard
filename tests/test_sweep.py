@@ -2,17 +2,26 @@
 
 import concurrent.futures as cf
 import dataclasses
+import datetime as dt
 import pathlib
 import typing as typ
 
 import pytest
 
+from concordat_dashboard import cli
 from concordat_dashboard import sweep as sweep_module
+from concordat_dashboard.catalogue import PLACEMENTS
 from concordat_dashboard.classify import RawFinding
-from concordat_dashboard.model import Excluded, Exemption, RuleInfo, State, Sweep, Trait
+from concordat_dashboard.estate import Estate
+from concordat_dashboard.model import Excluded, Exemption, RuleInfo, State, Trait
 from concordat_dashboard.process import CommandFailedError
-from concordat_dashboard.render import write_site
-from concordat_dashboard.sweep import Locations, SweepConfig, sweep_repository
+from concordat_dashboard.sweep import (
+    Locations,
+    SweepConfig,
+    build_config,
+    run_sweep,
+    sweep_repository,
+)
 
 if typ.TYPE_CHECKING:
     from concordat_dashboard.sweep import ExemptionIndex
@@ -40,13 +49,14 @@ class FakeRunner:
         return ()
 
 
-def _config(root: pathlib.Path) -> SweepConfig:
-    """Build a config sweeping local clones under *root*.
+def _config(root: pathlib.Path, runner: type = FakeRunner) -> SweepConfig:
+    """Build a config sweeping local clones under *root* with a stub runner.
 
     Returns
     -------
     SweepConfig
-        The config.
+        The config; its `runner_factory` builds *runner*, so no rule package or
+        network is needed.
     """
     exemptions: ExemptionIndex = {
         "always-red": {},
@@ -54,13 +64,13 @@ def _config(root: pathlib.Path) -> SweepConfig:
         "exempted": {"leynos/demo": (Exemption("p", "why"),)},
     }
     locations = Locations(root / "work", root / "pins", root)
-    return SweepConfig("leynos", RULES, exemptions, locations)
-
-
-@pytest.fixture(autouse=True)
-def fake_runner(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Replace the concordat runner so no rule package or network is needed."""
-    monkeypatch.setattr(sweep_module, "_runner", lambda *_args: FakeRunner())
+    return SweepConfig(
+        "leynos",
+        RULES,
+        exemptions,
+        locations,
+        runner_factory=lambda *_args: runner(),
+    )
 
 
 def test_relative_local_root_is_resolved_before_the_fetch(
@@ -81,27 +91,26 @@ def test_owner_case_does_not_hide_an_exemption(clone: pathlib.Path) -> None:
     assert result.cells["exempted"].state is State.EXEMPT, "exemption must match"
 
 
+class UnreadableRunner:
+    """A runner whose rule cannot read the checkout."""
+
+    def run(self, _rule_id: str, _tree: pathlib.Path) -> tuple[RawFinding, ...]:
+        """Fail as a permission error would.
+
+        Raises
+        ------
+        PermissionError
+            Always.
+        """
+        message = "denied"
+        raise PermissionError(message)
+
+
 def test_unreadable_repository_is_all_indeterminate_not_a_crash(
-    clone: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    clone: pathlib.Path,
 ) -> None:
     """A read error in one repository must not stop the estate sweep."""
-
-    class UnreadableRunner:
-        """A runner whose rule cannot read the checkout."""
-
-        def run(self, _rule_id: str, _tree: pathlib.Path) -> tuple[RawFinding, ...]:
-            """Fail as a permission error would.
-
-            Raises
-            ------
-            PermissionError
-                Always.
-            """
-            message = "denied"
-            raise PermissionError(message)
-
-    monkeypatch.setattr(sweep_module, "_runner", lambda *_args: UnreadableRunner())
-    result = sweep_repository("demo", _config(clone.parent))
+    result = sweep_repository("demo", _config(clone.parent, UnreadableRunner))
     message = result.cells["always-red"].unproven[0].message
     assert result.sha == "unknown", "the repository is not swept"
     assert "could not be read (PermissionError)" in message, "the kind is kept"
@@ -142,7 +151,9 @@ def test_checkouts_are_removed_unless_kept(clone: pathlib.Path) -> None:
 
 
 def test_command_output_never_reaches_the_published_reason(
-    clone: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    clone: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A command's stderr may name a private repository; only its summary is shown."""
 
@@ -158,10 +169,12 @@ def test_command_output_never_reaches_the_published_reason(
         raise CommandFailedError(full, "git fetch failed (128)")
 
     monkeypatch.setattr(sweep_module, "checkout_tree", refuse)
-    result = sweep_repository("demo", _config(clone.parent))
+    with caplog.at_level("INFO"):
+        result = sweep_repository("demo", _config(clone.parent))
     message = result.cells["always-red"].unproven[0].message
     assert "git fetch failed (128)" in message, "the summary is published"
     assert "a-private-repository" not in message, "command output must not be"
+    assert "a-private-repository" not in caplog.text, "nor may the run log carry it"
 
 
 def test_breach_beats_an_exemption_on_record(clone: pathlib.Path) -> None:
@@ -189,22 +202,47 @@ def test_collect_returns_results_in_name_order_and_logs_public_names(
     assert "demo" in logged, "public names are logged"
 
 
-def test_swept_repository_renders_with_its_finding_text(
-    clone: pathlib.Path, tmp_path: pathlib.Path
+@pytest.fixture
+def in_process_pool(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run the sweep's "process" pool on threads, so stubs reach the workers."""
+    monkeypatch.setattr(cf, "ProcessPoolExecutor", cf.ThreadPoolExecutor)
+
+
+@pytest.mark.usefixtures("in_process_pool")
+def test_run_sweep_uses_the_injected_clock_and_keeps_the_estate_counts(
+    clone: pathlib.Path,
 ) -> None:
-    """From a swept repository to a detail page: the path the generator takes."""
-    config = _config(clone.parent)
-    repo = sweep_repository("demo", config)
-    swept = Sweep(
-        "leynos",
-        "2026-11-16T04:17:00+00:00",
-        "0.1.0",
-        "e" * 40,
-        RULES,
-        (repo,),
-        Excluded(0, 0, None),
-    )
-    write_site(swept, tmp_path)
-    page = (tmp_path / "repos" / "demo.html").read_text("utf-8")
+    """The sweep's timestamp, exclusions and row order come from its inputs."""
+    estate = Estate(("zzz-ghost", "demo"), Excluded(2, 1, 7, 3))
+    moment = dt.datetime(2026, 11, 16, 4, 17, tzinfo=dt.UTC)
+    swept = run_sweep(_config(clone.parent), estate, 2, clock=lambda: moment)
+    assert swept.generated_at == "2026-11-16T04:17:00+00:00", "injected clock"
+    assert swept.excluded == Excluded(2, 1, 7, 3), "exclusions pass through"
+    assert [r.name for r in swept.repos] == ["demo", "zzz-ghost"], "name order"
+    assert len(swept.concordat_commit) == 40, "the pinned commit is recorded"
+
+
+@pytest.mark.usefixtures("in_process_pool")
+def test_cli_sweep_then_render_publishes_the_finding_text(
+    clone: pathlib.Path, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The whole path: list, sweep, persist as JSON, render pages from the file."""
+    estate = Estate(("demo",), Excluded(0, 0, None))
+    monkeypatch.setattr(cli, "list_estate", lambda *_args: estate)
+    monkeypatch.setattr(cli, "build_config", lambda *_args: _config(clone.parent))
+    sweep_file, site = tmp_path / "sweep.json", tmp_path / "site"
+    cli.app(["sweep", str(sweep_file)], result_action="return_value")
+    cli.app(["render", str(sweep_file), str(site)], result_action="return_value")
+    page = (site / "repos" / "demo.html").read_text("utf-8")
     assert "R-1" in page, "the finding code is on the detail page"
     assert 'id="always-red"' in page, "the rule has an anchor"
+
+
+def test_build_config_discovers_the_pinned_rules_and_hides_the_token(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The config carries every pinned rule, its exemptions and a hidden token."""
+    config = build_config("leynos", Locations(tmp_path, tmp_path), "s3cr3t-token")
+    assert len(config.rules) == len(PLACEMENTS), "one rule per placed package"
+    assert "leynos/netsuke" in config.exemptions["nested-cargo-nextest"], "exemptions"
+    assert "s3cr3t-token" not in repr(config), "the token must not appear in a repr"

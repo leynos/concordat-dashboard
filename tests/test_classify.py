@@ -77,6 +77,14 @@ def test_breach_and_unproven_together_keep_both() -> None:
     assert (len(cell.findings), len(cell.unproven)) == (1, 1), "both lists are kept"
 
 
+def test_unproven_finding_beats_an_exemption_on_record() -> None:
+    """An exemption does not turn an unproven fact into a clean mark."""
+    unproven = RawFinding("E", "", 0, "cannot be proven", is_indeterminate=False)
+    cell = derive_cell(ANY_RULE, (unproven,), (frozenset(), (EXEMPTION,)))
+    assert cell.state is State.INDETERMINATE, "unproven evidence is still unproven"
+    assert cell.exemptions == (EXEMPTION,), "the exemption is shown beside it"
+
+
 def test_breach_beats_an_exemption_on_record() -> None:
     """An exemption never hides a finding the rule still reports."""
     cell = derive_cell(ANY_RULE, (BREACH,), (frozenset(), (EXEMPTION,)))
