@@ -10,7 +10,7 @@ dependencies = [
     # Bump the SHA deliberately (and check PLACEMENTS in catalogue.py).
     "concordat @ git+https://github.com/leynos/concordat.git@e9d254f4439e39c74657037c89bb749ee4372345",
     "cuprum>=0.1.0",
-    "cyclopts==4.25.2",
+    "cyclopts==5.4.2",
     "jinja2>=3.1",
     "pyyaml==6.0.3",
 ]
