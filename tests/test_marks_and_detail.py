@@ -2,7 +2,7 @@
 
 import typing as typ
 
-from concordat_dashboard.detail import page_of
+from concordat_dashboard.detail import entry_of, page_of
 from concordat_dashboard.marks import TITLE_DETAIL_LIMIT, mark_for
 from concordat_dashboard.model import Cell, Exemption, Finding, RepoResult, State
 
@@ -75,3 +75,41 @@ def test_detail_page_of_an_unfetched_repository_links_to_the_repository(
     """With no commit swept there is no commit URL to offer."""
     repo = RepoResult("ghost", "unknown", frozenset(), sweep.repos[0].cells)
     assert page_of(repo, sweep).commit_url.endswith("/leynos/ghost"), "repository URL"
+
+
+def test_title_falls_back_to_the_unproven_message_without_findings(
+    sweep: Sweep,
+) -> None:
+    """An indeterminate cell with no finding quotes its unproven message."""
+    unproven = Finding("X-2", "Makefile", 0, "cannot be proven")
+    cell = Cell(State.INDETERMINATE, unproven=(unproven,))
+    title = mark_for("demo", _rule(sweep), cell).title
+    assert title.endswith(". cannot be proven"), "the unproven message is the detail"
+
+
+def test_title_has_no_detail_when_the_cell_has_no_text(sweep: Sweep) -> None:
+    """A compliant cell has nothing to quote, so the title ends at its state."""
+    title = mark_for("demo", _rule(sweep), Cell(State.COMPLIANT)).title
+    assert title == "demo / dependabot-update-shape: compliant", "no trailing detail"
+
+
+def test_detail_entry_routes_findings_unproven_and_exemptions(sweep: Sweep) -> None:
+    """Each kind of cell text lands in its own section of the entry."""
+    rule = _rule(sweep)
+    unproven = Finding("X-2", "", 0, "cannot be proven")
+    cell = Cell(
+        State.NONCOMPLIANT,
+        (FINDING,),
+        (Exemption("crates/x", "a fixture crate"),),
+        (unproven,),
+    )
+    entry = entry_of(rule, cell)
+    assert [(b.code, b.location, b.text) for b in entry.breaches] == [
+        ("X-1", "Makefile:3", "a finding message")
+    ], "a finding with a line shows path:line"
+    assert [(u.location, u.text) for u in entry.unproven] == [
+        ("", "cannot be proven")
+    ], "a finding with no line shows the bare path"
+    assert [(e.location, e.text) for e in entry.exemptions] == [
+        ("crates/x", "a fixture crate")
+    ], "an exemption shows its path and rationale"
