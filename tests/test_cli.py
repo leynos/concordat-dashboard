@@ -2,15 +2,15 @@
 
 import typing as typ
 
+import pytest
+
 from concordat_dashboard import cli
-from concordat_dashboard.estate import Estate
+from concordat_dashboard.estate import Estate, IncompleteListingError
 from concordat_dashboard.model import Excluded
 from concordat_dashboard.serialize import dumps, loads
 
 if typ.TYPE_CHECKING:
     import pathlib
-
-    import pytest
 
     from concordat_dashboard.model import Sweep
     from concordat_dashboard.sweep import SweepConfig
@@ -53,3 +53,36 @@ def test_sweep_persists_what_the_sweep_returns(
     cli.app(["sweep", str(out), "--only", "rusty"], result_action="return_value")
     assert seen == [("rusty",)], "only the named repository is swept"
     assert loads(out.read_text("utf-8")) == sweep, "the sweep is persisted"
+
+
+def test_a_truncated_listing_stops_the_sweep_without_writing_a_file(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Partial coverage must never be written as a complete sweep."""
+
+    def truncated(*_args: object) -> Estate:
+        """Fail as a capped listing does.
+
+        Raises
+        ------
+        IncompleteListingError
+            Always.
+        """
+        message = "the listing reached its limit"
+        raise IncompleteListingError(message)
+
+    monkeypatch.setattr(cli, "list_estate", truncated)
+    out = tmp_path / "sweep.json"
+    with pytest.raises(IncompleteListingError):
+        cli.app(["sweep", str(out)], result_action="return_value")
+    assert not out.exists(), "no sweep file is written"
+
+
+def test_render_of_a_missing_sweep_file_fails(tmp_path: pathlib.Path) -> None:
+    """A missing input is an error, not an empty site."""
+    with pytest.raises(FileNotFoundError):
+        cli.app(
+            ["render", str(tmp_path / "absent.json"), str(tmp_path / "site")],
+            result_action="return_value",
+        )
+    assert not (tmp_path / "site").exists(), "no site is written"

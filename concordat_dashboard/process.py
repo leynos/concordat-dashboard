@@ -27,7 +27,17 @@ _CATALOGUE = ProgramCatalogue(
 
 
 class CommandFailedError(RuntimeError):
-    """A command exited non-zero."""
+    """A command failed.
+
+    The message may carry the command's standard error, which can name things
+    that must not be published. `public_summary` is the part safe to show: the
+    program, its first arguments and how it failed, never its output.
+    """
+
+    def __init__(self, message: str, public_summary: str = "a command failed") -> None:
+        """Keep the full *message* and the publishable *public_summary*."""
+        super().__init__(message)
+        self.public_summary = public_summary
 
 
 def _run(program: Program, args: tuple[str, ...]) -> str:
@@ -49,17 +59,16 @@ def _run(program: Program, args: tuple[str, ...]) -> str:
         # run reaches its child-termination path.
         result = asyncio.run(asyncio.wait_for(command.run(), DEADLINE_SECONDS))
     except TimeoutError as error:
-        message = (
+        summary = (
             f"{program} {' '.join(args[:3])} timed out after {DEADLINE_SECONDS:g}s"
         )
-        raise CommandFailedError(message) from error
+        raise CommandFailedError(summary, summary) from error
     if not result.ok:
         # cuprum 0.1.0 types the streams as optional; they are captured here.
         detail = (result.stderr or "").strip()[-300:]
-        message = (
-            f"{program} {' '.join(args[:3])} failed ({result.exit_code}): {detail}"
-        )
-        raise CommandFailedError(message)
+        summary = f"{program} {' '.join(args[:3])} failed ({result.exit_code})"
+        message = f"{summary}: {detail}"
+        raise CommandFailedError(message, summary)
     return result.stdout or ""
 
 

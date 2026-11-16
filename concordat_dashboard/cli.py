@@ -9,6 +9,7 @@ import cyclopts
 
 from .estate import list_estate
 from .render import write_site
+from .runner import github_token
 from .serialize import dumps, loads
 from .sweep import Locations, build_config, run_sweep
 
@@ -71,7 +72,7 @@ def _sweep(options: SweepOptions) -> str:
         estate = dataclasses.replace(
             estate, names=tuple(n for n in estate.names if n in options.only)
         )
-    config = build_config(options.owner, locations)
+    config = build_config(options.owner, locations, github_token())
     return dumps(run_sweep(config, estate, options.workers))
 
 

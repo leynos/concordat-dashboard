@@ -97,8 +97,9 @@ def local_ref(clone: pathlib.Path) -> str:
         except CommandFailedError:
             continue
         return candidate
+    # The local path is not published; only the fact is.
     message = f"{clone} has neither origin/HEAD nor origin/main"
-    raise CommandFailedError(message)
+    raise CommandFailedError(message, "the clone has no default branch")
 
 
 def checkout_tree(

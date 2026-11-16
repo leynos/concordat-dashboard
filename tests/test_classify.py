@@ -75,3 +75,10 @@ def test_breach_and_unproven_together_keep_both() -> None:
     cell = derive_cell(ANY_RULE, (BREACH, unproven), (frozenset(), ()))
     assert cell.state is State.NONCOMPLIANT, "a real breach decides the state"
     assert (len(cell.findings), len(cell.unproven)) == (1, 1), "both lists are kept"
+
+
+def test_breach_beats_an_exemption_on_record() -> None:
+    """An exemption never hides a finding the rule still reports."""
+    cell = derive_cell(ANY_RULE, (BREACH,), (frozenset(), (EXEMPTION,)))
+    assert cell.state is State.NONCOMPLIANT, "the breach decides the state"
+    assert cell.exemptions == (EXEMPTION,), "the exemption is shown beside it"

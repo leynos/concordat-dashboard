@@ -19,7 +19,6 @@ from .redact import public_reason
 from .runner import (
     Runner,
     concordat_identity,
-    github_token,
     packages_root,
     rule_defaults,
 )
@@ -53,10 +52,12 @@ class SweepConfig:
     rules: tuple[RuleInfo, ...]
     exemptions: ExemptionIndex
     locations: Locations
+    # Never shown in a repr or a log line.
+    token: str | None = dataclasses.field(default=None, repr=False)
 
 
 @functools.cache
-def _runner(pin_cache_dir: pathlib.Path) -> Runner:
+def _runner(pin_cache_dir: pathlib.Path, token: str | None) -> Runner:
     """Build one runner per worker process, so certification is shared.
 
     Returns
@@ -64,7 +65,7 @@ def _runner(pin_cache_dir: pathlib.Path) -> Runner:
     Runner
         The process's runner.
     """
-    return Runner(pin_cache_dir, github_token())
+    return Runner(pin_cache_dir, token)
 
 
 @contextlib.contextmanager
@@ -146,7 +147,7 @@ def sweep_repository(name: str, config: SweepConfig) -> RepoResult:
         One cell per rule. A repository that cannot be fetched comes back with
         every cell indeterminate and the reason, rather than failing the sweep.
     """
-    runner = _runner(config.locations.pin_cache_dir)
+    runner = _runner(config.locations.pin_cache_dir, config.token)
     try:
         with _tree_dir(config) as dest:
             sha = checkout_tree(config.owner, name, _source(name, config), dest)
@@ -160,16 +161,24 @@ def sweep_repository(name: str, config: SweepConfig) -> RepoResult:
                 for rule in config.rules
             }
     except CommandFailedError as error:
-        return _failed_result(name, config, f"the checkout failed: {error}")
+        # The page gets the summary only; the detail (scrubbed) goes to the log.
+        LOG.warning("%s: %s", name, public_reason(str(error)))
+        return _failed_result(
+            name, config, f"the checkout failed: {error.public_summary}"
+        )
     except OSError as error:
         # An unreadable file in one repository must not stop the estate sweep.
+        LOG.warning("%s: %s", name, public_reason(str(error)))
+        kind = type(error).__name__
         return _failed_result(
-            name, config, f"the repository could not be read: {error}"
+            name, config, f"the repository could not be read ({kind})"
         )
     return RepoResult(name, sha, traits, cells)
 
 
-def build_config(owner: str, locations: Locations) -> SweepConfig:
+def build_config(
+    owner: str, locations: Locations, token: str | None = None
+) -> SweepConfig:
     """Discover the rules and their exemptions and bundle the sweep settings.
 
     Parameters
@@ -178,6 +187,8 @@ def build_config(owner: str, locations: Locations) -> SweepConfig:
         The GitHub owner being swept.
     locations
         The directories the sweep reads and writes.
+    token
+        The GitHub token the rules' pin and certification lookups use.
 
     Returns
     -------
@@ -188,7 +199,7 @@ def build_config(owner: str, locations: Locations) -> SweepConfig:
     exemptions = {
         rule.id: exemptions_by_repository(rule_defaults(rule.id)) for rule in rules
     }
-    return SweepConfig(owner, rules, exemptions, locations)
+    return SweepConfig(owner, rules, exemptions, locations, token)
 
 
 def _utc_now() -> dt.datetime:
@@ -202,7 +213,7 @@ def _utc_now() -> dt.datetime:
     return dt.datetime.now(dt.UTC)
 
 
-def _collect(
+def collect(
     pool: cf.Executor, names: tuple[str, ...], config: SweepConfig
 ) -> tuple[RepoResult, ...]:
     """Sweep *names* on *pool*, logging each repository as it finishes.
@@ -248,7 +259,7 @@ def run_sweep(
         All results, rows in name order.
     """
     with cf.ProcessPoolExecutor(max_workers=workers) as pool:
-        repos = _collect(pool, estate.names, config)
+        repos = collect(pool, estate.names, config)
     version, commit = concordat_identity()
     return Sweep(
         owner=config.owner,
