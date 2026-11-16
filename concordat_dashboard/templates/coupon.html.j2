@@ -131,6 +131,11 @@
       <p class="mt-2 text-[13px]">
         Left out of the sweep: {{ excluded.forks }} forks, {{ excluded.archived }} archived and {{ excluded.empty }} empty repositories{% if excluded.private is not none %}; {{ excluded.private }} private repositories not shown{% endif %}.
       </p>
+      {% if not authenticated %}
+      <p class="mt-1 text-[13px] font-black uppercase text-print-red">
+        Unauthenticated run: no GitHub token was found, so rules that need the API may show as indeterminate.
+      </p>
+      {% endif %}
     </section>
     <aside class="border-2 border-print-red p-2 text-center font-black uppercase leading-tight text-print-red">
       <p class="text-[20px]">Keep a correct copy of your entry</p>

@@ -346,4 +346,5 @@ def run_sweep(
         rules=config.rules,
         repos=repos,
         excluded=estate.excluded,
+        authenticated=config.token is not None,
     )

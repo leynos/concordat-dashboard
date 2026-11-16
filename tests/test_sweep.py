@@ -214,6 +214,7 @@ def test_run_sweep_uses_the_injected_clock_and_keeps_the_estate_counts(
         swept = run_sweep(_config(clone.parent), estate, 2, clocks)
     assert swept.generated_at == "2026-11-16T04:17:00+00:00", "injected clock"
     assert swept.excluded == Excluded(2, 1, 7, 3), "exclusions pass through"
+    assert swept.authenticated is False, "a config with no token is flagged"
     assert [r.name for r in swept.repos] == ["demo", "zzz-ghost"], "name order"
     assert len(swept.concordat_commit) == 40, "the pinned commit is recorded"
     expected = (

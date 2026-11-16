@@ -11,6 +11,7 @@ import importlib.metadata
 import json
 import logging
 import os
+import sys
 import typing as typ
 
 from concordat.auditor.github import GithubClient
@@ -54,10 +55,24 @@ def github_token() -> str | None:
     if token:
         return token
     try:
-        return gh("auth", "token").strip() or None
+        found = gh("auth", "token").strip() or None
     except CommandFailedError, OSError:
         # No `gh` login, or no `gh` at all: the rules degrade to indeterminate.
-        return None
+        found = None
+    if found is None:
+        warn_unauthenticated()
+    return found
+
+
+def warn_unauthenticated() -> None:
+    """Announce, as a workflow annotation, that no token could be found.
+
+    A quota-starved sweep must be visible in the run, not only on the page.
+    """
+    sys.stderr.write(
+        "::warning title=No GitHub token::no token in GITHUB_TOKEN, GH_TOKEN or"
+        " the gh login; rules that need the API report indeterminate\n"
+    )
 
 
 def concordat_identity() -> tuple[str, str]:

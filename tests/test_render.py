@@ -71,6 +71,13 @@ def test_unknown_private_count_prints_no_line(sweep: Sweep) -> None:
     assert "private" not in render_index(unknown), "no count means no line"
 
 
+def test_unauthenticated_run_is_flagged_in_the_footer(sweep: Sweep) -> None:
+    """A quota-starved run says so; an authenticated one is silent."""
+    flagged = render_index(dataclasses.replace(sweep, authenticated=False))
+    assert "Unauthenticated run" in flagged, "the footer warns"
+    assert "Unauthenticated run" not in render_index(sweep), "no warning otherwise"
+
+
 @pytest.fixture
 def site(sweep: Sweep, tmp_path: pathlib.Path) -> pathlib.Path:
     """Write the sample sweep's site.

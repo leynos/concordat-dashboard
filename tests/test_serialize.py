@@ -1,5 +1,6 @@
 """The sweep file round-trips, so `render` can run apart from `sweep`."""
 
+import dataclasses
 import json
 import typing as typ
 
@@ -36,3 +37,13 @@ def test_unknown_private_count_round_trips_as_null(sweep: Sweep) -> None:
     document["excluded"]["private"] = None
     restored = loads(json.dumps(document))
     assert restored.excluded.private is None, "an unknown count must stay None"
+
+
+def test_unauthenticated_flag_is_written_and_read_back(sweep: Sweep) -> None:
+    """sweep.json records a run that had no token; older files read as authenticated."""
+    flagged = dataclasses.replace(sweep, authenticated=False)
+    document = json.loads(dumps(flagged))
+    assert document["authenticated"] is False, "the flag is in sweep.json"
+    assert loads(dumps(flagged)).authenticated is False, "and survives the round trip"
+    del document["authenticated"]
+    assert loads(json.dumps(document)).authenticated is True, "absent means true"

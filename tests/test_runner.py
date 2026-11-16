@@ -98,3 +98,24 @@ def test_concordat_identity_reports_the_pinned_commit() -> None:
     version, commit = concordat_identity()
     assert version, "concordat has a version"
     assert len(commit) == 40, "the pinned commit is a full SHA"
+
+
+def test_a_missing_token_is_announced_as_a_workflow_warning(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """No token must not pass silently: the run shows a `::warning`."""
+    for name in ("GITHUB_TOKEN", "GH_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(runner_module, "gh", lambda *_args: "\n")
+    found = runner_module.github_token()
+    assert found is None, "an empty login is no token"
+    assert capsys.readouterr().err.startswith("::warning"), "the annotation is raised"
+
+
+def test_a_found_token_raises_no_warning(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An authenticated run stays quiet."""
+    monkeypatch.setenv("GITHUB_TOKEN", "a")
+    assert runner_module.github_token() == "a", "the environment token is used"
+    assert not capsys.readouterr().err, "nothing is announced"

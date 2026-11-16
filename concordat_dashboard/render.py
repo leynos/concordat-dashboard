@@ -95,6 +95,7 @@ def render_index(sweep: Sweep) -> str:
             page=page_for(sweep, ""),
             coupon=coupon_of(sweep),
             excluded=sweep.excluded,
+            authenticated=sweep.authenticated,
             result_labels=RESULT_LABELS,
             result_titles=RESULT_TITLES,
         )

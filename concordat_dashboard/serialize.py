@@ -132,6 +132,7 @@ def dumps(sweep: Sweep) -> str:
         "concordat_version": sweep.concordat_version,
         "concordat_commit": sweep.concordat_commit,
         "excluded": vars_excluded(sweep.excluded),
+        "authenticated": sweep.authenticated,
         "rules": rules,
         "repos": repos,
     }
@@ -183,4 +184,5 @@ def loads(text: str) -> Sweep:
         rules=tuple(_rule_from_json(r) for r in raw["rules"]),
         repos=tuple(_repo_from_json(r) for r in raw["repos"]),
         excluded=Excluded(**raw["excluded"]),
+        authenticated=raw.get("authenticated", True),
     )

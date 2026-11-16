@@ -104,3 +104,6 @@ class Sweep:
     rules: tuple[RuleInfo, ...]
     repos: tuple[RepoResult, ...]
     excluded: Excluded
+    # False when the sweep found no GitHub token, so API-backed rules were
+    # starved of quota and their cells may be indeterminate for that reason.
+    authenticated: bool = True
