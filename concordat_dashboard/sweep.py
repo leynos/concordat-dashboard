@@ -5,6 +5,7 @@ import contextlib
 import dataclasses
 import datetime as dt
 import functools
+import logging
 import pathlib
 import tempfile
 import typing as typ
@@ -14,6 +15,7 @@ from .checkout import checkout_tree, local_ref, origin_url
 from .classify import derive_cell
 from .model import Cell, Exemption, Finding, RepoResult, RuleInfo, State, Sweep
 from .process import CommandFailedError
+from .redact import public_reason
 from .runner import (
     Runner,
     concordat_identity,
@@ -27,6 +29,8 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from .estate import Estate
+
+LOG = logging.getLogger(__name__)
 
 type ExemptionIndex = dict[str, dict[str, tuple[Exemption, ...]]]
 
@@ -121,7 +125,7 @@ def _failed_result(name: str, config: SweepConfig, reason: str) -> RepoResult:
     RepoResult
         A row of indeterminate cells, each carrying *reason*.
     """
-    unproven = (Finding("ERROR", "", 0, reason),)
+    unproven = (Finding("ERROR", "", 0, public_reason(reason)),)
     cells = {r.id: Cell(State.INDETERMINATE, unproven=unproven) for r in config.rules}
     return RepoResult(name, "unknown", frozenset(), cells)
 
@@ -187,7 +191,44 @@ def build_config(owner: str, locations: Locations) -> SweepConfig:
     return SweepConfig(owner, rules, exemptions, locations)
 
 
-def run_sweep(config: SweepConfig, estate: Estate, workers: int) -> Sweep:
+def _utc_now() -> dt.datetime:
+    """Return the current time in UTC.
+
+    Returns
+    -------
+    dt.datetime
+        The time now.
+    """
+    return dt.datetime.now(dt.UTC)
+
+
+def _collect(
+    pool: cf.Executor, names: tuple[str, ...], config: SweepConfig
+) -> tuple[RepoResult, ...]:
+    """Sweep *names* on *pool*, logging each repository as it finishes.
+
+    Only public repository names are logged, so the run log is safe to read.
+
+    Returns
+    -------
+    tuple[RepoResult, ...]
+        The results in name order, whatever order they finished in.
+    """
+    futures = [pool.submit(sweep_repository, name, config) for name in names]
+    results = []
+    for done, future in enumerate(cf.as_completed(futures), 1):
+        result = future.result()
+        LOG.info("swept %d/%d: %s", done, len(futures), result.name)
+        results.append(result)
+    return tuple(sorted(results, key=lambda r: r.name))
+
+
+def run_sweep(
+    config: SweepConfig,
+    estate: Estate,
+    workers: int,
+    clock: cabc.Callable[[], dt.datetime] = _utc_now,
+) -> Sweep:
     """Sweep every repository in *estate*, in parallel across processes.
 
     Parameters
@@ -198,6 +239,8 @@ def run_sweep(config: SweepConfig, estate: Estate, workers: int) -> Sweep:
         The repositories to sweep and the exclusion counts.
     workers
         How many repositories to sweep at once.
+    clock
+        Supplies the sweep's timestamp; injectable so a test is deterministic.
 
     Returns
     -------
@@ -205,13 +248,11 @@ def run_sweep(config: SweepConfig, estate: Estate, workers: int) -> Sweep:
         All results, rows in name order.
     """
     with cf.ProcessPoolExecutor(max_workers=workers) as pool:
-        repos = tuple(
-            pool.map(sweep_repository, estate.names, [config] * len(estate.names))
-        )
+        repos = _collect(pool, estate.names, config)
     version, commit = concordat_identity()
     return Sweep(
         owner=config.owner,
-        generated_at=dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
+        generated_at=clock().isoformat(timespec="seconds"),
         concordat_version=version,
         concordat_commit=commit,
         rules=config.rules,

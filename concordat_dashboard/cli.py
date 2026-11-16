@@ -1,6 +1,7 @@
 """Command line: `sweep` the estate into a JSON file, then `render` the site."""
 
 import dataclasses
+import logging
 import pathlib
 import typing as typ
 
@@ -108,5 +109,6 @@ def render(sweep_file: pathlib.Path, out: pathlib.Path) -> None:
 
 
 def main() -> None:
-    """Run the command line."""
+    """Run the command line, logging sweep progress (public names only)."""
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     app()

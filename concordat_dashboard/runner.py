@@ -30,6 +30,7 @@ from concordat.rules.provisioning_certification import certifying
 
 from .classify import RawFinding
 from .process import CommandFailedError, gh
+from .redact import public_reason
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -151,7 +152,7 @@ class Runner:
         try:
             result = run_rule(rule_id, tree, envelope_builder=self._builder)
         except Exception as error:  # ruff: ignore[blind-except] - any rule failure becomes one cell's reason
-            reason = f"the rule could not run: {error}"[:300]
+            reason = public_reason(f"the rule could not run: {error}")
             return (RawFinding("ERROR", "", 0, reason, is_indeterminate=True),)
         return tuple(
             RawFinding(f.rule_id, f.path, f.line, f.message, f.verdict == INDETERMINATE)
