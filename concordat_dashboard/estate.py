@@ -13,7 +13,7 @@ from .model import Excluded
 from .process import gh
 
 PUBLIC = "PUBLIC"
-LIST_FIELDS = "name,isFork,isArchived,visibility"
+LIST_FIELDS = "name,isFork,isArchived,isEmpty,visibility"
 LIST_LIMIT = "1000"
 
 
@@ -43,8 +43,9 @@ def classify_repositories(
     Returns
     -------
     Estate
-        Sorted public, active, non-fork names; counts of forks and archived
-        public repositories; and the private count (None when unknown).
+        Sorted public, active, non-fork, non-empty names; counts of forks,
+        archived and empty public repositories; and the private count (None
+        when unknown).
 
     Examples
     --------
@@ -55,11 +56,14 @@ def classify_repositories(
     """
     public = [row for row in rows if row["visibility"] == PUBLIC]
     private = len(rows) - len(public)
-    swept = [r for r in public if not r["isFork"] and not r["isArchived"]]
+    active = [r for r in public if not r["isFork"] and not r["isArchived"]]
+    # A repository with no commits has no default branch to fetch.
+    swept = [r for r in active if not r.get("isEmpty", False)]
     excluded = Excluded(
         forks=sum(1 for r in public if r["isFork"]),
         archived=sum(1 for r in public if r["isArchived"] and not r["isFork"]),
         private=private or hidden_private,
+        empty=len(active) - len(swept),
     )
     return Estate(tuple(sorted(r["name"] for r in swept)), excluded)
 
@@ -72,7 +76,7 @@ def list_estate(owner: str, hidden_private: int | None = None) -> Estate:
     Parameters
     ----------
     owner
-        The GitHub user or organisation.
+        The GitHub user or organization.
     hidden_private
         See `classify_repositories`.
 

@@ -91,13 +91,15 @@ css: node_modules ## Compile the Tailwind stylesheet and copy the fonts into the
 	$(BUN) x @tailwindcss/cli -i assets/coupon.css -o $(SITE_DIR)/coupon.css --minify
 	cp -r assets/fonts $(SITE_DIR)/
 
+# An empty LOCAL_ROOT (as in the scheduled run) fetches from GitHub instead.
 sweep: build ## Sweep local clones against every concordat rule (SWEEP_ARGS adds options)
 	$(UV_ENV) $(UV) run concordat-dashboard sweep $(SWEEP_FILE) \
 	  --workdir $(WORK_DIR)/trees --pin-cache $(WORK_DIR)/pins \
-	  --local-root $(LOCAL_ROOT) $(SWEEP_ARGS)
+	  $(if $(LOCAL_ROOT),--local-root $(LOCAL_ROOT)) $(SWEEP_ARGS)
 
 render: build css ## Render the sweep file into the static site
 	$(UV_ENV) $(UV) run concordat-dashboard render $(SWEEP_FILE) $(SITE_DIR)
+	cp $(SWEEP_FILE) $(SITE_DIR)/sweep.json
 
 site: sweep render ## Sweep, then render the site into $(SITE_DIR)
 

@@ -125,7 +125,7 @@ class Runner:
             The shared certifier.
 
         Certification depends only on the shared-actions revision, so its
-        answers are memoised inside the certifier and reused across repositories.
+        answers are memoized inside the certifier and reused across repositories.
         """
         if self._certifier is None:
             self._certifier = github_certifier(self._client, parameters)

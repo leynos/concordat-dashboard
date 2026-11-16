@@ -7,20 +7,21 @@ import pytest
 from concordat_dashboard import sweep as sweep_module
 from concordat_dashboard.classify import RawFinding
 from concordat_dashboard.model import Exemption, RuleInfo, State, Trait
-from concordat_dashboard.process import git, git_in
 from concordat_dashboard.sweep import Locations, SweepConfig, sweep_repository
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import pathlib
 
     from concordat_dashboard.sweep import ExemptionIndex
+
+    type CloneFactory = cabc.Callable[[str, dict[str, str]], pathlib.Path]
 
 RULES = (
     RuleInfo("always-red", "Always red", "1", "A", None),
     RuleInfo("rusty-only", "Rusty only", "1", "A", Trait.RUST),
     RuleInfo("exempted", "Exempted", "1", "A", None),
 )
-AUTHOR = ("-c", "user.name=t", "-c", "user.email=t@example.invalid")
 
 
 class FakeRunner:
@@ -37,17 +38,6 @@ class FakeRunner:
         if rule_id == "always-red":
             return (RawFinding("R-1", "f", 1, "red", is_indeterminate=False),)
         return ()
-
-
-def _make_clone(root: pathlib.Path, name: str) -> None:
-    """Create `root/name`, a clone of a one-commit upstream holding a .rs file."""
-    upstream = root / "upstream" / name
-    upstream.mkdir(parents=True)
-    git_in(upstream, "init", "--quiet", "--initial-branch", "main")
-    (upstream / "lib.rs").write_text("", "utf-8")
-    git_in(upstream, "add", ".")
-    git_in(upstream, *AUTHOR, "commit", "--quiet", "-m", "first")
-    git("clone", "--quiet", str(upstream), str(root / name))
 
 
 def _config(root: pathlib.Path) -> SweepConfig:
@@ -73,10 +63,9 @@ def fake_runner(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sweep_module, "_runner", lambda _pins: FakeRunner())
 
 
-def test_repository_is_marked_per_rule(tmp_path: pathlib.Path) -> None:
+def test_repository_is_marked_per_rule(clone: pathlib.Path) -> None:
     """Breach, applicable-and-clean, and exempt each get their own state."""
-    _make_clone(tmp_path, "demo")
-    result = sweep_repository("demo", _config(tmp_path))
+    result = sweep_repository("demo", _config(clone.parent))
     states = {rule_id: cell.state for rule_id, cell in result.cells.items()}
     expected = {
         "always-red": State.NONCOMPLIANT,
@@ -100,8 +89,8 @@ def test_unfetchable_repository_is_all_indeterminate_not_a_crash(
     assert "checkout failed" in message, "the reason is kept"
 
 
-def test_checkouts_are_removed_unless_kept(tmp_path: pathlib.Path) -> None:
+def test_checkouts_are_removed_unless_kept(clone: pathlib.Path) -> None:
     """The work directory is empty after a sweep, so a run does not fill the disk."""
-    _make_clone(tmp_path, "demo")
-    sweep_repository("demo", _config(tmp_path))
-    assert not list((tmp_path / "work").iterdir()), "checkouts must be removed"
+    root = clone.parent
+    sweep_repository("demo", _config(root))
+    assert not list((root / "work").iterdir()), "checkouts must be removed"

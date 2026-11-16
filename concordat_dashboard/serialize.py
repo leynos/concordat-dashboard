@@ -95,7 +95,7 @@ def vars_of(item: Finding | Exemption) -> Json:
 
 
 def dumps(sweep: Sweep) -> str:
-    """Serialise a sweep.
+    """Serialize a sweep.
 
     Parameters
     ----------
@@ -144,12 +144,13 @@ def vars_excluded(excluded: Excluded) -> Json:
     Returns
     -------
     Json
-        Forks, archived and private counts.
+        Forks, archived, private and empty counts.
     """
     return {
         "forks": excluded.forks,
         "archived": excluded.archived,
         "private": excluded.private,
+        "empty": excluded.empty,
     }
 
 

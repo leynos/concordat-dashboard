@@ -8,7 +8,7 @@ import cyclopts
 
 from .estate import list_estate
 from .render import write_site
-from .serialise import dumps, loads
+from .serialize import dumps, loads
 from .sweep import Locations, build_config, run_sweep
 
 app = cyclopts.App(
@@ -60,7 +60,7 @@ def _sweep(options: SweepOptions) -> str:
     Returns
     -------
     str
-        The serialised sweep.
+        The serialized sweep.
     """
     locations = Locations(
         options.workdir, options.pin_cache, options.local_root, options.keep_trees

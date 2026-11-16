@@ -73,7 +73,7 @@ def test_rule_info_reads_manifest_and_placement(tmp_path: pathlib.Path) -> None:
     )
 
 
-def test_exemptions_group_by_repository_and_normalise_text() -> None:
+def test_exemptions_group_by_repository_and_normalize_text() -> None:
     """Exemptions key on owner/name; rationale whitespace is collapsed."""
     defaults = {
         "exemptions": [

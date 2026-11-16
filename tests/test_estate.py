@@ -6,9 +6,9 @@ from concordat_dashboard.estate import classify_repositories
 
 
 def _row(
-    name: str, *, visibility: str = "PUBLIC", fork: bool = False, archived: bool = False
+    name: str, *, visibility: str = "PUBLIC", flags: tuple[str, ...] = ()
 ) -> dict[str, typ.Any]:
-    """Build one listing row.
+    """Build one listing row; *flags* may name `fork`, `archived` and `empty`.
 
     Returns
     -------
@@ -17,8 +17,9 @@ def _row(
     """
     return {
         "name": name,
-        "isFork": fork,
-        "isArchived": archived,
+        "isFork": "fork" in flags,
+        "isArchived": "archived" in flags,
+        "isEmpty": "empty" in flags,
         "visibility": visibility,
     }
 
@@ -26,11 +27,12 @@ def _row(
 ROWS = [
     _row("zeta"),
     _row("alpha"),
-    _row("a-fork", fork=True),
-    _row("old", archived=True),
-    _row("forked-and-archived", fork=True, archived=True),
+    _row("a-fork", flags=("fork",)),
+    _row("old", flags=("archived",)),
+    _row("forked-and-archived", flags=("fork", "archived")),
     _row("secret", visibility="PRIVATE"),
-    _row("secret-archived", visibility="PRIVATE", archived=True),
+    _row("secret-archived", visibility="PRIVATE", flags=("archived",)),
+    _row("no-commits", flags=("empty",)),
 ]
 
 
@@ -43,8 +45,8 @@ def test_swept_names_are_public_active_non_forks_in_order() -> None:
 def test_exclusions_are_counted_without_double_counting() -> None:
     """A fork that is also archived counts as a fork only."""
     excluded = classify_repositories(ROWS).excluded
-    counts = (excluded.forks, excluded.archived, excluded.private)
-    assert counts == (2, 1, 2), "forks, archived and private counts"
+    counts = (excluded.forks, excluded.archived, excluded.private, excluded.empty)
+    assert counts == (2, 1, 2, 1), "forks, archived, private and empty counts"
 
 
 def test_private_names_never_reach_the_estate() -> None:

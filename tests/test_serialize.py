@@ -3,7 +3,7 @@
 import json
 import typing as typ
 
-from concordat_dashboard.serialise import dumps, loads
+from concordat_dashboard.serialize import dumps, loads
 
 if typ.TYPE_CHECKING:
     from concordat_dashboard.model import Sweep

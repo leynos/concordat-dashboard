@@ -86,6 +86,7 @@ class Excluded:
     forks: int
     archived: int
     private: int | None
+    empty: int = 0
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

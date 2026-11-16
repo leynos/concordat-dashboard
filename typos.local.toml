@@ -18,6 +18,8 @@ ignore = [
   # External environment variables retain their published spelling.
   '\bNO_COLOR\b',
   '\bCARGO_TERM_COLOR\b',
+  # Tailwind utility class names are external API: `text-center`, `items-center`.
+  '\b[a-z]+-center\b',
 ]
 
 [files]

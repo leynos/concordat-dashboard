@@ -2,6 +2,35 @@
 
 This guide explains the contributor workflow for the generated project.
 
+## Architecture
+
+[Coupon design](design.md) describes the data flow and modules, and
+[ADR 001](adr-001-coupon-marks-and-sweep-shape.md) records why the marks are
+derived the way they are.
+
+### Adding or bumping a concordat rule
+
+Concordat is a git dependency pinned to one commit in `pyproject.toml`. After
+bumping the SHA, run `make test`: `tests/test_catalogue.py` fails when the
+pinned concordat ships a rule package that `PLACEMENTS` in
+`concordat_dashboard/catalogue.py` does not place, or no longer ships one it
+does. Add the package to `PLACEMENTS` with its block and the trait it is about
+(`None` for any repository), in the column order wanted on the page.
+
+### Unproven findings
+
+`UNPROVEN_MARKERS` in `concordat_dashboard/classify.py` lists the phrases that
+mark a finding as missing evidence rather than a defect. Add a phrase when a
+rule starts reporting a new reader limit as a breach; add a test case beside
+the existing ones.
+
+### Styling
+
+`assets/coupon.css` is the Tailwind entry point. `make css` compiles it with the
+`bun.lock`-pinned `@tailwindcss/cli`. Class names are read from the templates
+and the Python package, so a class built in Python (the stake tones in
+`view.py`) must appear there as a whole string.
+
 ## Local workflow
 
 The public entrypoint for formatting, linting, typechecking, tests, and

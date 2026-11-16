@@ -1,4 +1,6 @@
-"""Shared fixtures: a small, hand-built sweep that exercises every state."""
+"""Shared fixtures: a hand-built sweep for every state, and tiny git repositories."""
+
+import typing as typ
 
 import pytest
 
@@ -13,7 +15,13 @@ from concordat_dashboard.model import (
     Sweep,
     Trait,
 )
+from concordat_dashboard.process import git, git_in
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+    import pathlib
+
+AUTHOR = ("-c", "user.name=t", "-c", "user.email=t@example.invalid")
 RULES = (
     RuleInfo(
         "dependabot-update-shape", "Dependabot update shape", "0.1.0", "UPDATES", None
@@ -84,3 +92,69 @@ def sweep() -> Sweep:
         repos=(plain, rusty),
         excluded=Excluded(forks=21, archived=6, private=11),
     )
+
+
+@pytest.fixture
+def commit_all() -> cabc.Callable[[pathlib.Path, str], None]:
+    """Provide a function that commits everything in a repository.
+
+    Returns
+    -------
+    cabc.Callable[[pathlib.Path, str], None]
+        Commits all changes in the given repository with the given message.
+    """
+
+    def commit(repo: pathlib.Path, message: str) -> None:
+        """Stage and commit every change in *repo*."""
+        git_in(repo, "add", ".")
+        git_in(repo, *AUTHOR, "commit", "--quiet", "-m", message)
+
+    return commit
+
+
+@pytest.fixture
+def make_clone(
+    tmp_path: pathlib.Path,
+    commit_all: cabc.Callable[[pathlib.Path, str], None],
+) -> cabc.Callable[[str, dict[str, str]], pathlib.Path]:
+    """Provide a function that makes `tmp_path/<name>`, a clone of a new upstream.
+
+    Returns
+    -------
+    cabc.Callable[[str, dict[str, str]], pathlib.Path]
+        Takes a name and the files of the single commit; returns the clone.
+    """
+
+    def make(name: str, files: dict[str, str]) -> pathlib.Path:
+        """Create the upstream with *files*, then clone it.
+
+        Returns
+        -------
+        pathlib.Path
+            The clone, whose `origin/HEAD` is the upstream's branch.
+        """
+        upstream = tmp_path / "upstream" / name
+        upstream.mkdir(parents=True)
+        git_in(upstream, "init", "--quiet", "--initial-branch", "main")
+        for relative, text in files.items():
+            (upstream / relative).write_text(text, "utf-8")
+        commit_all(upstream, "first")
+        clone = tmp_path / name
+        git("clone", "--quiet", str(upstream), str(clone))
+        return clone
+
+    return make
+
+
+@pytest.fixture
+def clone(
+    make_clone: cabc.Callable[[str, dict[str, str]], pathlib.Path],
+) -> pathlib.Path:
+    """Provide a clone named `demo` holding a README and a Rust source file.
+
+    Returns
+    -------
+    pathlib.Path
+        The clone, one directory below `tmp_path`.
+    """
+    return make_clone("demo", {"README.md": "hello\n", "lib.rs": ""})

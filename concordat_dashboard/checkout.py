@@ -1,4 +1,4 @@
-"""Materialise a repository's default-branch tree for the rules to read.
+"""Materialize a repository's default-branch tree for the rules to read.
 
 Both the scheduled run (shallow fetch from GitHub) and a local run (fetch from
 a clone under the projects directory) end in the same shape: a fresh git
@@ -14,6 +14,14 @@ if typ.TYPE_CHECKING:
     import pathlib
 
 GITHUB = "https://github.com"
+SKIP_LFS = (
+    "-c",
+    "filter.lfs.process=",
+    "-c",
+    "filter.lfs.smudge=",
+    "-c",
+    "filter.lfs.required=false",
+)
 
 
 def origin_url(owner: str, name: str) -> str:
@@ -39,7 +47,7 @@ def origin_url(owner: str, name: str) -> str:
     return f"{GITHUB}/{owner}/{name}.git"
 
 
-def materialise(source: str, ref: str, dest: pathlib.Path) -> str:
+def materialize(source: str, ref: str, dest: pathlib.Path) -> str:
     """Fetch *ref* from *source* into a new repository at *dest*.
 
     Parameters
@@ -58,7 +66,10 @@ def materialise(source: str, ref: str, dest: pathlib.Path) -> str:
     """
     git_in(dest, "init", "--quiet")
     git_in(dest, "fetch", "--quiet", "--depth", "1", source, ref)
-    git_in(dest, "checkout", "--quiet", "FETCH_HEAD")
+    # The rules read text, so an LFS pointer is as good as its content, and a
+    # runner without git-lfs (or a repository whose LFS objects are gone) must
+    # not fail the checkout.
+    git_in(dest, *SKIP_LFS, "checkout", "--quiet", "FETCH_HEAD")
     return git_in(dest, "rev-parse", "HEAD").strip()
 
 
@@ -114,6 +125,6 @@ def checkout_tree(
     str
         The commit SHA checked out.
     """
-    sha = materialise(source[0], source[1], dest)
+    sha = materialize(source[0], source[1], dest)
     git_in(dest, "remote", "add", "origin", origin_url(owner, name))
     return sha

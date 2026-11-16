@@ -1,4 +1,4 @@
-"""A materialised tree is a git repository whose origin matches the GitHub slug."""
+"""A materialized tree is a git repository whose origin matches the GitHub slug."""
 
 import typing as typ
 
@@ -7,35 +7,16 @@ import pytest
 from concordat_dashboard.checkout import (
     checkout_tree,
     local_ref,
-    materialise,
+    materialize,
     origin_url,
 )
-from concordat_dashboard.process import CommandFailedError, git, git_in
+from concordat_dashboard.process import CommandFailedError, git_in
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import pathlib
 
-AUTHOR = ("-c", "user.name=t", "-c", "user.email=t@example.invalid")
-
-
-@pytest.fixture
-def clone(tmp_path: pathlib.Path) -> pathlib.Path:
-    """Provide a local clone with one commit on a branch known as origin/main.
-
-    Returns
-    -------
-    pathlib.Path
-        The clone.
-    """
-    upstream = tmp_path / "upstream"
-    upstream.mkdir()
-    git_in(upstream, "init", "--quiet", "--initial-branch", "main")
-    (upstream / "README.md").write_text("hello\n", "utf-8")
-    git_in(upstream, "add", ".")
-    git_in(upstream, *AUTHOR, "commit", "--quiet", "-m", "first")
-    target = tmp_path / "clone"
-    git("clone", "--quiet", str(upstream), str(target))
-    return target
+    type CloneFactory = cabc.Callable[[str, dict[str, str]], pathlib.Path]
 
 
 def test_origin_url_is_the_canonical_https_clone_url() -> None:
@@ -64,13 +45,13 @@ def test_local_ref_fails_without_a_default_branch(tmp_path: pathlib.Path) -> Non
         local_ref(empty)
 
 
-def test_materialise_checks_out_the_fetched_commit(
+def test_materialize_checks_out_the_fetched_commit(
     clone: pathlib.Path, tmp_path: pathlib.Path
 ) -> None:
     """The tree holds the files and the returned SHA is the fetched commit."""
     dest = tmp_path / "tree"
     dest.mkdir()
-    sha = materialise(str(clone), "origin/HEAD", dest)
+    sha = materialize(str(clone), "origin/HEAD", dest)
     assert (dest / "README.md").read_text("utf-8") == "hello\n", "files are checked out"
     expected = git_in(clone, "rev-parse", "origin/HEAD").strip()
     assert sha == expected, "the returned SHA is the fetched commit"
@@ -85,3 +66,27 @@ def test_checkout_tree_sets_origin_so_exemptions_match(
     checkout_tree("leynos", "demo", (str(clone), "origin/HEAD"), dest)
     url = git_in(dest, "remote", "get-url", "origin").strip()
     assert url == "https://github.com/leynos/demo.git", "origin must be the GitHub slug"
+
+
+def test_checkout_survives_a_failing_lfs_filter(
+    make_clone: CloneFactory,
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A repository whose LFS objects cannot be fetched must still be checked out."""
+    files = {".gitattributes": "*.bin filter=lfs -text\n", "pointer.bin": "x\n"}
+    source = make_clone("lfs", files)
+    # Make the smudge filter fail the way a missing git-lfs does.
+    failing_filter = {
+        "GIT_CONFIG_COUNT": "2",
+        "GIT_CONFIG_KEY_0": "filter.lfs.smudge",
+        "GIT_CONFIG_VALUE_0": "false",
+        "GIT_CONFIG_KEY_1": "filter.lfs.required",
+        "GIT_CONFIG_VALUE_1": "true",
+    }
+    for key, value in failing_filter.items():
+        monkeypatch.setenv(key, value)
+    dest = tmp_path / "tree"
+    dest.mkdir()
+    materialize(str(source), "HEAD", dest)
+    assert (dest / "pointer.bin").is_file(), "the pointer file must be checked out"
