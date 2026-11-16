@@ -14,10 +14,10 @@ from concordat_dashboard.estate import (
     ListingFailedError,
 )
 from concordat_dashboard.model import Excluded
-from concordat_dashboard.process import CommandFailedError
 from concordat_dashboard.serialize import dumps, loads
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import pathlib
 
     from concordat_dashboard.model import Sweep
@@ -89,22 +89,11 @@ def test_a_truncated_listing_stops_the_sweep_without_writing_a_file(
 def test_a_failed_listing_exposes_no_gh_output_on_any_stream(
     tmp_path: pathlib.Path,
     monkeypatch: pytest.MonkeyPatch,
+    failing_with: cabc.Callable[[str], cabc.Callable[..., str]],
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """The stderr of `gh` may name a private repository; the CLI must not print it."""
-
-    def refuse(*_args: str) -> str:
-        """Fail as `gh repo list` with a revealing stderr would.
-
-        Raises
-        ------
-        CommandFailedError
-            Always.
-        """
-        full = "gh failed (1): could not resolve leynos/a-private-repository"
-        raise CommandFailedError(full, "gh failed (1)")
-
-    monkeypatch.setattr(estate_module, "gh", refuse)
+    monkeypatch.setattr(estate_module, "gh", failing_with("gh failed (1)"))
     monkeypatch.setattr(
         sys, "argv", ["concordat-dashboard", "sweep", str(tmp_path / "s")]
     )

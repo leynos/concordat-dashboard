@@ -14,7 +14,6 @@ from concordat_dashboard.catalogue import PLACEMENTS
 from concordat_dashboard.classify import RawFinding
 from concordat_dashboard.estate import Estate
 from concordat_dashboard.model import Excluded, Exemption, RuleInfo, State, Trait
-from concordat_dashboard.process import CommandFailedError
 from concordat_dashboard.sweep import (
     Locations,
     SweepConfig,
@@ -24,6 +23,8 @@ from concordat_dashboard.sweep import (
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from concordat_dashboard.sweep import ExemptionIndex
 
 RULES = (
@@ -153,26 +154,15 @@ def test_checkouts_are_removed_unless_kept(clone: pathlib.Path) -> None:
 def test_command_output_never_reaches_the_published_reason(
     clone: pathlib.Path,
     monkeypatch: pytest.MonkeyPatch,
+    failing_with: cabc.Callable[[str], cabc.Callable[..., str]],
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A command's stderr may name a private repository; only its summary is shown."""
-
-    def refuse(*_args: object) -> str:
-        """Fail as a git fetch with a revealing stderr would.
-
-        Raises
-        ------
-        CommandFailedError
-            Always.
-        """
-        full = "git fetch failed (128): repository leynos/a-private-repository gone"
-        raise CommandFailedError(full, "git fetch failed (128)")
-
-    monkeypatch.setattr(sweep_module, "checkout_tree", refuse)
+    monkeypatch.setattr(sweep_module, "checkout_tree", failing_with("git failed (128)"))
     with caplog.at_level("INFO"):
         result = sweep_repository("demo", _config(clone.parent))
     message = result.cells["always-red"].unproven[0].message
-    assert "git fetch failed (128)" in message, "the summary is published"
+    assert "git failed (128)" in message, "the summary is published"
     assert "a-private-repository" not in message, "command output must not be"
     assert "a-private-repository" not in caplog.text, "nor may the run log carry it"
 

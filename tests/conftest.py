@@ -15,7 +15,7 @@ from concordat_dashboard.model import (
     Sweep,
     Trait,
 )
-from concordat_dashboard.process import git, git_in
+from concordat_dashboard.process import CommandFailedError, git, git_in
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -92,6 +92,42 @@ def sweep() -> Sweep:
         repos=(plain, rusty),
         excluded=Excluded(forks=21, archived=6, private=11),
     )
+
+
+@pytest.fixture
+def failing_with() -> cabc.Callable[[str], cabc.Callable[..., str]]:
+    """Provide a factory of commands that fail with a revealing stderr.
+
+    Returns
+    -------
+    cabc.Callable[[str], cabc.Callable[..., str]]
+        Takes the publishable summary; returns a function that always raises
+        `CommandFailedError` whose full message names a private repository.
+    """
+
+    def factory(summary: str) -> cabc.Callable[..., str]:
+        """Build the failing command.
+
+        Returns
+        -------
+        cabc.Callable[..., str]
+            A function that raises on every call.
+        """
+
+        def fail(*_args: object) -> str:
+            """Fail as a command with a revealing stderr would.
+
+            Raises
+            ------
+            CommandFailedError
+                Always.
+            """
+            full = f"{summary}: could not resolve leynos/a-private-repository"
+            raise CommandFailedError(full, summary)
+
+        return fail
+
+    return factory
 
 
 @pytest.fixture
