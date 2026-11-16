@@ -1,5 +1,6 @@
 """Sweep the estate: every repository against every functioning rule."""
 
+import collections
 import concurrent.futures as cf
 import contextlib
 import dataclasses
@@ -245,6 +246,29 @@ def collect(
     return tuple(sorted(results, key=lambda r: r.name))
 
 
+def log_outcome(repos: tuple[RepoResult, ...], elapsed: dt.timedelta) -> None:
+    """Log how long the sweep took and how its marks came out.
+
+    Counts only: nothing here names a repository.
+
+    Parameters
+    ----------
+    repos
+        The swept repositories.
+    elapsed
+        How long the sweep took.
+    """
+    totals = collections.Counter(
+        cell.state.value for repo in repos for cell in repo.cells.values()
+    )
+    LOG.info(
+        "swept %d repositories in %.0fs: %s",
+        len(repos),
+        elapsed.total_seconds(),
+        ", ".join(f"{count} {state}" for state, count in sorted(totals.items())),
+    )
+
+
 def run_sweep(
     config: SweepConfig,
     estate: Estate,
@@ -269,12 +293,15 @@ def run_sweep(
     Sweep
         All results, rows in name order.
     """
+    started = clock()
     with cf.ProcessPoolExecutor(max_workers=workers) as pool:
         repos = collect(pool, estate.names, config)
+    finished = clock()
+    log_outcome(repos, finished - started)
     version, commit = concordat_identity()
     return Sweep(
         owner=config.owner,
-        generated_at=clock().isoformat(timespec="seconds"),
+        generated_at=finished.isoformat(timespec="seconds"),
         concordat_version=version,
         concordat_commit=commit,
         rules=config.rules,

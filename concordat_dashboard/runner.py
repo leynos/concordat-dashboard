@@ -9,6 +9,7 @@ so the same shared-actions question is asked once, not once per repository.
 import functools
 import importlib.metadata
 import json
+import logging
 import os
 import typing as typ
 
@@ -35,6 +36,7 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import pathlib
 
+LOG = logging.getLogger(__name__)
 API_URL = "https://api.github.com"
 INDETERMINATE = "indeterminate"
 
@@ -154,6 +156,7 @@ class Runner:
             # Only the exception class is published; its message could carry
             # anything a rule read.
             reason = f"the rule could not run ({type(error).__name__})"
+            LOG.warning("%s: %s", rule_id, reason)
             return (RawFinding("ERROR", "", 0, reason, is_indeterminate=True),)
         return tuple(
             RawFinding(f.rule_id, f.path, f.line, f.message, f.verdict == INDETERMINATE)

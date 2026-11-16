@@ -31,7 +31,8 @@ class CommandFailedError(RuntimeError):
 
     The message may carry the command's standard error, which can name things
     that must not be published. `public_summary` is the part safe to show: the
-    program, its first arguments and how it failed, never its output.
+    program and how it failed (exit code or timeout), never its arguments, which
+    can hold a checkout path, and never its output.
     """
 
     def __init__(self, message: str, public_summary: str = "a command failed") -> None:

@@ -13,7 +13,9 @@ if typ.TYPE_CHECKING:
 
 
 def test_operational_failure_becomes_one_indeterminate_finding(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A rule that cannot run must not fail the sweep."""
 
@@ -29,11 +31,14 @@ def test_operational_failure_becomes_one_indeterminate_finding(
         raise RuntimeError(message)
 
     monkeypatch.setattr(runner_module, "run_rule", explode)
-    findings = Runner(tmp_path / "pins", None).run("yaml-lint-baseline", tmp_path)
+    with caplog.at_level("WARNING"):
+        findings = Runner(tmp_path / "pins", None).run("yaml-lint-baseline", tmp_path)
     assert len(findings) == 1, "one failure is one finding"
     assert findings[0].is_indeterminate, "a failure is never a breach"
     assert "RuntimeError" in findings[0].message, "the kind of failure is kept"
     assert "private" not in findings[0].message, "the exception text is not published"
+    assert "yaml-lint-baseline" in caplog.text, "the failed rule is logged"
+    assert "private" not in caplog.text, "the exception text is not logged either"
 
 
 @pytest.mark.parametrize(

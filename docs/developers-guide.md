@@ -31,6 +31,47 @@ the existing ones.
 and the Python package, so a class built in Python (the stake tones in
 `view.py`) must appear there as a whole string.
 
+### Build tooling
+
+The coupon needs `uv` (Python 3.14 and the locked dependencies), `bun` (the
+pinned Tailwind CLI, installed by `make css` with
+`bun install --frozen-lockfile`), `conftest` 0.52.0 and `makeutil` 0.1.2 on
+`PATH` (the rule packages run both), and a GitHub login for `gh` or a
+`GITHUB_TOKEN`. The make targets are:
+
+- `make sweep` writes `.work/sweep.json` from local clones under `LOCAL_ROOT`;
+  an empty `LOCAL_ROOT` fetches from GitHub instead;
+- `make css` compiles `assets/coupon.css` and copies `assets/fonts` into
+  `site/`;
+- `make render` renders the sweep file into `site/`; and
+- `make site` runs `sweep` then `render`.
+
+`SWEEP_ARGS` passes options to the sweep command (`--workers`, `--only`,
+`--hidden-private`, `--keep-trees`, `--workdir`, `--pin-cache`). Keep the
+default work directory for scheduled runs: checkouts are removed as each
+repository finishes unless `--keep-trees` is set.
+
+### The Pages workflow
+
+`.github/workflows/pages.yml` runs daily and on demand on a GitHub-hosted
+runner. The build job has read-only permissions: it installs the tools
+(makeutil is checked against its pinned SHA-256 digest), restores the
+action-pin cache, runs `make site LOCAL_ROOT=` and uploads `site/`. The deploy
+job alone holds `pages: write` and `id-token: write`. Every action is pinned to
+a full commit SHA, and `tests/test_pages_workflow.py` checks that boundary. The
+job summary records the REST budget before and after the sweep, so a rise in
+lookups shows there first. A cold pin cache costs about 750 REST calls; a warm
+one close to none. Set the `PRIVATE_REPOSITORY_COUNT` repository variable to
+show the count of private repositories, which a repository-scoped token cannot
+see.
+
+### Diagnostics
+
+The run log carries progress per repository, a line for each rule that could
+not run, and a closing summary of duration and counts. It names public
+repositories only. See [Coupon design](design.md#diagnostics-and-privacy) for
+what a failure reason may contain.
+
 ## Local workflow
 
 The public entrypoint for formatting, linting, typechecking, tests, and

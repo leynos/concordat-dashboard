@@ -200,16 +200,19 @@ def in_process_pool(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.usefixtures("in_process_pool")
 def test_run_sweep_uses_the_injected_clock_and_keeps_the_estate_counts(
-    clone: pathlib.Path,
+    clone: pathlib.Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     """The sweep's timestamp, exclusions and row order come from its inputs."""
     estate = Estate(("zzz-ghost", "demo"), Excluded(2, 1, 7, 3))
     moment = dt.datetime(2026, 11, 16, 4, 17, tzinfo=dt.UTC)
-    swept = run_sweep(_config(clone.parent), estate, 2, clock=lambda: moment)
+    with caplog.at_level("INFO"):
+        swept = run_sweep(_config(clone.parent), estate, 2, clock=lambda: moment)
     assert swept.generated_at == "2026-11-16T04:17:00+00:00", "injected clock"
     assert swept.excluded == Excluded(2, 1, 7, 3), "exclusions pass through"
     assert [r.name for r in swept.repos] == ["demo", "zzz-ghost"], "name order"
     assert len(swept.concordat_commit) == 40, "the pinned commit is recorded"
+    assert "swept 2 repositories in 0s" in caplog.text, "a closing summary is logged"
+    assert "noncompliant" in caplog.text, "the summary counts the marks"
 
 
 @pytest.mark.usefixtures("in_process_pool")

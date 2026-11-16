@@ -57,16 +57,18 @@ and head columns drop away and the grid scrolls sideways.
 Failure reasons (a rule that could not run, a checkout that failed) become
 finding text on a public page and in `sweep.json`, so they carry only a safe
 summary: the exception class for a rule or a read error, and for a command the
-program, its first arguments and how it failed
-(`CommandFailedError.public_summary`), never its output or message. The full
-detail goes to the run log through `redact.public_reason`, which replaces
-token-shaped strings, URL credentials and bearer values and cuts the text to
-one bounded line. The run log names only public repositories, one line as each
-finishes. The GitHub token travels in `SweepConfig` (hidden from its `repr`) to
-the per-process runner, and is never logged. Every `git` and `gh` call has a
-deadline (`DEADLINE_SECONDS`), so a stalled fetch becomes one repository's
-indeterminate row instead of holding the sweep. A repository listing that
-reaches its cap is rejected rather than published as complete.
+program and how it failed, as an exit code or a timeout
+(`CommandFailedError.public_summary`), never its arguments, output or message.
+The run log carries the same summaries, passed through `redact.public_reason`,
+which also replaces token-shaped strings, URL credentials and bearer values and
+cuts the text to one bounded line, so no detail of a failure is logged beyond
+what is published. The log names only public repositories: one line as each
+finishes, one for each rule that could not run, and a closing summary of the
+run's duration and totals. The GitHub token travels in `SweepConfig` (hidden
+from its `repr`) to the per-process runner, and is never logged. Every `git` and
+`gh` call has a deadline (`DEADLINE_SECONDS`), so a stalled fetch becomes one
+repository's indeterminate row instead of holding the sweep. A repository
+listing that reaches its cap is rejected rather than published as complete.
 
 ## Styling
 
