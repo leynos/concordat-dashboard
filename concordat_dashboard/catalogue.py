@@ -125,7 +125,7 @@ def discover_rules(packages_root: pathlib.Path) -> tuple[RuleInfo, ...]:
 def exemptions_by_repository(
     defaults: cabc.Mapping[str, object],
 ) -> dict[str, tuple[Exemption, ...]]:
-    """Group a package's shipped exemptions by `owner/name`.
+    """Group a package's shipped exemptions by lower-case `owner/name`.
 
     Parameters
     ----------
@@ -142,5 +142,6 @@ def exemptions_by_repository(
     for entry in typ.cast("list[dict[str, str]]", defaults.get("exemptions") or []):
         where = entry.get("path") or entry.get("directory") or ""
         rationale = " ".join(entry.get("rationale", "").split())
-        grouped.setdefault(entry["repository"], []).append(Exemption(where, rationale))
+        slug = entry["repository"].lower()
+        grouped.setdefault(slug, []).append(Exemption(where, rationale))
     return {repository: tuple(items) for repository, items in grouped.items()}

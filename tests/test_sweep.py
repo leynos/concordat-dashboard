@@ -1,5 +1,7 @@
 """One repository is fetched, judged by every rule, and marked."""
 
+import dataclasses
+import pathlib
 import typing as typ
 
 import pytest
@@ -10,12 +12,7 @@ from concordat_dashboard.model import Exemption, RuleInfo, State, Trait
 from concordat_dashboard.sweep import Locations, SweepConfig, sweep_repository
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
-    import pathlib
-
     from concordat_dashboard.sweep import ExemptionIndex
-
-    type CloneFactory = cabc.Callable[[str, dict[str, str]], pathlib.Path]
 
 RULES = (
     RuleInfo("always-red", "Always red", "1", "A", None),
@@ -61,6 +58,50 @@ def _config(root: pathlib.Path) -> SweepConfig:
 def fake_runner(monkeypatch: pytest.MonkeyPatch) -> None:
     """Replace the concordat runner so no rule package or network is needed."""
     monkeypatch.setattr(sweep_module, "_runner", lambda _pins: FakeRunner())
+
+
+def test_relative_local_root_is_resolved_before_the_fetch(
+    clone: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The fetch runs inside the work tree, so a relative path must not leak in."""
+    monkeypatch.chdir(clone.parent)
+    base = _config(clone.parent)
+    locations = dataclasses.replace(base.locations, local_root=pathlib.Path())
+    result = sweep_repository("demo", dataclasses.replace(base, locations=locations))
+    assert len(result.sha) == 40, "a relative local root must still fetch"
+
+
+def test_owner_case_does_not_hide_an_exemption(clone: pathlib.Path) -> None:
+    """GitHub names are case-insensitive; the exemption must still match."""
+    config = dataclasses.replace(_config(clone.parent), owner="Leynos")
+    result = sweep_repository("demo", config)
+    assert result.cells["exempted"].state is State.EXEMPT, "exemption must match"
+
+
+def test_unreadable_repository_is_all_indeterminate_not_a_crash(
+    clone: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A read error in one repository must not stop the estate sweep."""
+
+    class UnreadableRunner:
+        """A runner whose rule cannot read the checkout."""
+
+        def run(self, _rule_id: str, _tree: pathlib.Path) -> tuple[RawFinding, ...]:
+            """Fail as a permission error would.
+
+            Raises
+            ------
+            PermissionError
+                Always.
+            """
+            message = "denied"
+            raise PermissionError(message)
+
+    monkeypatch.setattr(sweep_module, "_runner", lambda _pins: UnreadableRunner())
+    result = sweep_repository("demo", _config(clone.parent))
+    message = result.cells["always-red"].unproven[0].message
+    assert result.sha == "unknown", "the repository is not swept"
+    assert "could not be read" in message, "the reason is kept"
 
 
 def test_repository_is_marked_per_rule(clone: pathlib.Path) -> None:

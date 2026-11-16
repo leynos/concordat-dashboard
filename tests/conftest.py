@@ -137,7 +137,9 @@ def make_clone(
         upstream.mkdir(parents=True)
         git_in(upstream, "init", "--quiet", "--initial-branch", "main")
         for relative, text in files.items():
-            (upstream / relative).write_text(text, "utf-8")
+            path = upstream / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, "utf-8")
         commit_all(upstream, "first")
         clone = tmp_path / name
         git("clone", "--quiet", str(upstream), str(clone))

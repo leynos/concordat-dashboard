@@ -88,6 +88,12 @@ def test_exemptions_group_by_repository_and_normalize_text() -> None:
     assert set(grouped) == {"o/a", "o/b"}, "one key per repository"
 
 
+def test_exemption_keys_are_lower_case() -> None:
+    """GitHub names are case-insensitive, so the index must be too."""
+    defaults = {"exemptions": [{"repository": "Leynos/Netsuke", "path": "p"}]}
+    assert set(exemptions_by_repository(defaults)) == {"leynos/netsuke"}, "key case"
+
+
 def test_package_without_exemptions_yields_none() -> None:
     """A package that ships no exemptions has an empty index."""
     assert exemptions_by_repository({}) == {}, "no exemptions means an empty index"

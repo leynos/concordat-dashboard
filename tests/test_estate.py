@@ -1,8 +1,21 @@
 """Only public, active, non-fork repositories are swept; private ones are counted."""
 
+import json
 import typing as typ
 
-from concordat_dashboard.estate import classify_repositories
+import pytest
+
+from concordat_dashboard import estate as estate_module
+from concordat_dashboard.estate import (
+    IncompleteListingError,
+    classify_repositories,
+    list_estate,
+)
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
+    from concordat_dashboard.estate import Estate
 
 
 def _row(
@@ -72,3 +85,44 @@ def test_visible_private_rows_win_over_the_supplied_count() -> None:
     rows = [_row("alpha"), _row("hidden", visibility="PRIVATE")]
     estate = classify_repositories(rows, hidden_private=99)
     assert estate.excluded.private == 1, "the listing's own count must win"
+
+
+@pytest.fixture
+def listing(monkeypatch: pytest.MonkeyPatch) -> cabc.Callable[[int], Estate]:
+    """Provide a function that lists *n* repositories under a cap of three.
+
+    Returns
+    -------
+    cabc.Callable[[int], Estate]
+        Takes the number of repositories GitHub returns; returns the estate.
+    """
+    monkeypatch.setattr(estate_module, "LIST_LIMIT", 3)
+
+    def list_n(count: int) -> Estate:
+        """List *count* repositories through the stubbed `gh`.
+
+        Returns
+        -------
+        Estate
+            The classified listing.
+        """
+        rows = [_row(f"r{i}") for i in range(count)]
+        monkeypatch.setattr(estate_module, "gh", lambda *_args: json.dumps(rows))
+        return list_estate("leynos")
+
+    return list_n
+
+
+def test_listing_that_reaches_the_cap_is_rejected(
+    listing: cabc.Callable[[int], Estate],
+) -> None:
+    """A truncated listing must not be published as complete coverage."""
+    with pytest.raises(IncompleteListingError, match="limit"):
+        listing(3)
+
+
+def test_listing_below_the_cap_passes_through(
+    listing: cabc.Callable[[int], Estate],
+) -> None:
+    """A listing under the cap is classified."""
+    assert len(listing(2).names) == 2, "names pass through"

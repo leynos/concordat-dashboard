@@ -1,5 +1,6 @@
 """Run the two external programs the sweep needs, through cuprum's allowlist."""
 
+import asyncio
 import typing as typ
 
 from cuprum import Program, ProgramCatalogue, ProjectSettings, sh
@@ -7,6 +8,9 @@ from cuprum import Program, ProgramCatalogue, ProjectSettings, sh
 if typ.TYPE_CHECKING:
     import pathlib
 
+# A shallow fetch or a repository listing takes seconds; this only bounds a
+# stalled connection so one repository cannot hold the whole sweep.
+DEADLINE_SECONDS = 300.0
 GIT = Program("git")
 GH = Program("gh")
 # cuprum 0.1.0 builds a catalogue from project settings, not `from_programs`.
@@ -37,9 +41,18 @@ def _run(program: Program, args: tuple[str, ...]) -> str:
     Raises
     ------
     CommandFailedError
-        If the program exits non-zero.
+        If the program exits non-zero or outlives `DEADLINE_SECONDS`.
     """
-    result = sh.make(program, catalogue=_CATALOGUE)(*args).run_sync()
+    command = sh.make(program, catalogue=_CATALOGUE)(*args)
+    try:
+        # cuprum 0.1.0's synchronous run has no deadline; cancelling the async
+        # run reaches its child-termination path.
+        result = asyncio.run(asyncio.wait_for(command.run(), DEADLINE_SECONDS))
+    except TimeoutError as error:
+        message = (
+            f"{program} {' '.join(args[:3])} timed out after {DEADLINE_SECONDS:g}s"
+        )
+        raise CommandFailedError(message) from error
     if not result.ok:
         # cuprum 0.1.0 types the streams as optional; they are captured here.
         detail = (result.stderr or "").strip()[-300:]

@@ -107,6 +107,16 @@ def test_site_has_one_page_per_repository_with_rule_anchors(
     assert 'href="repos/rusty.html#dependabot-update-shape"' in index, "cell link"
 
 
+def test_rendering_again_removes_pages_of_repositories_that_left(
+    sweep: Sweep, site: pathlib.Path
+) -> None:
+    """A repository that left the sweep must not stay reachable by name."""
+    remaining = dataclasses.replace(sweep, repos=sweep.repos[:1])
+    write_site(remaining, site)
+    names = sorted(p.name for p in (site / "repos").glob("*.html"))
+    assert names == ["plain.html"], "the page of the repository that left is gone"
+
+
 def test_pages_load_no_remote_script_or_stylesheet(site: pathlib.Path) -> None:
     """The published page is static: no CDN."""
     html = (site / "index.html").read_text("utf-8")

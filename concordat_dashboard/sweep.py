@@ -92,7 +92,9 @@ def _source(name: str, config: SweepConfig) -> tuple[str, str]:
     local_root = config.locations.local_root
     if local_root is None:
         return origin_url(config.owner, name), "HEAD"
-    clone = local_root / name
+    # The fetch runs inside the destination, so a relative path would resolve
+    # against that directory instead of the caller's.
+    clone = (local_root / name).resolve()
     return str(clone), local_ref(clone)
 
 
@@ -106,7 +108,9 @@ def _exemptions_for(
     tuple[Exemption, ...]
         The exemptions; empty when there are none.
     """
-    return config.exemptions[rule_id].get(f"{config.owner}/{name}", ())
+    # GitHub treats owner and repository names as case-insensitive, and the
+    # index is keyed in lower case.
+    return config.exemptions[rule_id].get(f"{config.owner}/{name}".lower(), ())
 
 
 def _failed_result(name: str, config: SweepConfig, reason: str) -> RepoResult:
@@ -153,6 +157,11 @@ def sweep_repository(name: str, config: SweepConfig) -> RepoResult:
             }
     except CommandFailedError as error:
         return _failed_result(name, config, f"the checkout failed: {error}")
+    except OSError as error:
+        # An unreadable file in one repository must not stop the estate sweep.
+        return _failed_result(
+            name, config, f"the repository could not be read: {error}"
+        )
     return RepoResult(name, sha, traits, cells)
 
 

@@ -14,7 +14,11 @@ from .process import gh
 
 PUBLIC = "PUBLIC"
 LIST_FIELDS = "name,isFork,isArchived,isEmpty,visibility"
-LIST_LIMIT = "1000"
+LIST_LIMIT = 1000
+
+
+class IncompleteListingError(RuntimeError):
+    """The repository listing may be truncated, so coverage would be partial."""
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -84,6 +88,15 @@ def list_estate(owner: str, hidden_private: int | None = None) -> Estate:
     -------
     Estate
         The swept names and exclusion counts.
+
+    Raises
+    ------
+    IncompleteListingError
+        If the listing reached the request limit, so repositories may be missing.
     """
-    raw = gh("repo", "list", owner, "--limit", LIST_LIMIT, "--json", LIST_FIELDS)
-    return classify_repositories(json.loads(raw), hidden_private)
+    raw = gh("repo", "list", owner, "--limit", str(LIST_LIMIT), "--json", LIST_FIELDS)
+    rows = json.loads(raw)
+    if len(rows) >= LIST_LIMIT:
+        message = f"the listing reached its limit of {LIST_LIMIT}; raise LIST_LIMIT"
+        raise IncompleteListingError(message)
+    return classify_repositories(rows, hidden_private)

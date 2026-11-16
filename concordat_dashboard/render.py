@@ -104,6 +104,10 @@ def render_index(sweep: Sweep) -> str:
 def write_site(sweep: Sweep, out: pathlib.Path) -> int:
     """Write `index.html` and one `repos/<name>.html` per repository.
 
+    A repository page left over from an earlier render is deleted: a repository
+    that has since left the sweep (for example, made private) must not stay
+    reachable by name.
+
     Parameters
     ----------
     sweep
@@ -117,10 +121,14 @@ def write_site(sweep: Sweep, out: pathlib.Path) -> int:
     int
         The number of pages written.
     """
-    (out / "repos").mkdir(parents=True, exist_ok=True)
+    pages = out / "repos"
+    pages.mkdir(parents=True, exist_ok=True)
+    current = {f"{repo.name}.html" for repo in sweep.repos}
+    for stale in (p for p in pages.glob("*.html") if p.name not in current):
+        stale.unlink()
     (out / "index.html").write_text(render_index(sweep), "utf-8")
     template = environment().get_template("repo.html.j2")
     for repo in sweep.repos:
         html = template.render(page=page_for(sweep, "../"), repo=page_of(repo, sweep))
-        (out / "repos" / f"{repo.name}.html").write_text(html, "utf-8")
+        (pages / f"{repo.name}.html").write_text(html, "utf-8")
     return len(sweep.repos) + 1
