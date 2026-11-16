@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+/* Class names live in the templates and in the view model's tone strings. */
+@source "../concordat_dashboard";
+
+/* Barlow Condensed (SIL OFL 1.1, see fonts/OFL.txt), self-hosted: no CDN. */
+@font-face {
+  font-family: "Barlow Condensed";
+  font-weight: 500;
+  font-display: swap;
+  src: url("fonts/barlow-condensed-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/barlow-condensed-latin-700-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  font-weight: 900;
+  font-display: swap;
+  src: url("fonts/barlow-condensed-latin-900-normal.woff2") format("woff2");
+}
+
+@theme {
+  /* The 1963 coupon: cream stock, one red, one black, a blue pencil. */
+  --color-paper: #f3ead0;
+  --color-paper-deep: #e9dcb8;
+  --color-ink: #1c1a17;
+  --color-rule: #6e6753;
+  --color-print-red: #bf1322;
+  --color-pencil: #274a9e;
+  --font-print: "Barlow Condensed", "Arial Narrow", "Nimbus Sans Narrow", "Liberation Sans Narrow",
+    "Roboto Condensed", "DejaVu Sans Condensed", "Helvetica Neue", Arial,
+    sans-serif;
+  --font-hand: "Bradley Hand", "Segoe Script", "Z003", "URW Chancery L",
+    cursive;
+}
+
+@layer components {
+  /* One ruled cell of the grid. Marks never rely on colour alone. */
+  .cell {
+    @apply h-[19px] w-[22px] min-w-[22px] border border-rule p-0 text-center
+      align-middle text-[12px] leading-none;
+  }
+  .cell > a,
+  .cell > span {
+    @apply flex h-full w-full items-center justify-center no-underline;
+  }
+  .cell-compliant {
+    @apply text-ink/45;
+  }
+  .cell-noncompliant {
+    @apply bg-print-red/10 font-black text-print-red;
+  }
+  .cell-noncompliant > a {
+    @apply underline decoration-print-red decoration-2 underline-offset-2;
+  }
+  .cell-indeterminate {
+    @apply bg-paper-deep font-black text-pencil;
+  }
+  .cell-exempt {
+    @apply font-bold text-pencil;
+  }
+  .cell-exempt > a {
+    @apply m-[2px] h-[calc(100%-4px)] w-[calc(100%-4px)] border border-pencil;
+  }
+  .cell-not_applicable {
+    @apply text-rule/70;
+    background-image: repeating-linear-gradient(
+      135deg,
+      transparent 0 3px,
+      color-mix(in srgb, var(--color-rule) 25%, transparent) 3px 4px
+    );
+  }
+  .block-gap {
+    @apply border-l-2 border-l-ink;
+  }
+  .cell:focus-within,
+  .cell a:focus-visible {
+    @apply outline-2 outline-offset-[-2px] outline-pencil;
+  }
+}

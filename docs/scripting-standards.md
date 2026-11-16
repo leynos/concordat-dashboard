@@ -165,6 +165,19 @@ the main application:
 CATALOGUE = Catalogue.from_programs("git", "cargo")
 ```
 
+### This project's catalogue
+
+The coupon generator keeps one catalogue in `concordat_dashboard/process.py`,
+allowing `git` and `gh` and nothing else; every external command goes through
+`git`, `git_in` or `gh` there. The released cuprum 0.1.0 builds a catalogue from
+`ProjectSettings` (it has no `Catalogue.from_programs`), has no timeout on
+`run_sync`, and types the captured streams as optional, so `_run` awaits the
+async `run()` under `asyncio.wait_for`, treats a timeout as a failure, and
+narrows the streams itself. A failure raises `CommandFailedError`, whose
+`public_summary` (program and exit code, never arguments or output) is the only
+part that may be published or logged. Add a program to the catalogue only
+together with a test that drives its failure path through the wrapper.
+
 ### Catalogue and allowlisting
 
 ```python

@@ -5,7 +5,15 @@ description = "concordat-dashboard package"
 readme = "README.md"
 requires-python = ">=3.14"
 license = { text = "ISC" }
-dependencies = []
+dependencies = [
+    # The rules under audit: pinned to one commit so a sweep is reproducible.
+    # Bump the SHA deliberately (and check PLACEMENTS in catalogue.py).
+    "concordat @ git+https://github.com/leynos/concordat.git@e9d254f4439e39c74657037c89bb749ee4372345",
+    "cuprum>=0.1.0",
+    "cyclopts==4.25.2",
+    "jinja2>=3.1",
+    "pyyaml==6.0.3",
+]
 
 [dependency-groups]
 dev = [
@@ -13,8 +21,6 @@ dev = [
     "interrogate",
     "pip-audit",
     "ruff==0.16.8",
-    "cyclopts==4.25.2",
-    "pyyaml==6.0.3",
     "types-pyyaml",
     "pyright",
     "ty==0.0.56",
@@ -317,13 +323,16 @@ mode = "syntax,semantic,near"
 min-size = 24
 surface = "all"
 top = 0
-exclude = [".venv/**", ".uv-cache/**", ".uv-tools/**", ".tools/**", ".git/**"]
+# assets/** holds the stylesheet: one @font-face per weight is data, not logic.
+exclude = [".venv/**", ".uv-cache/**", ".uv-tools/**", ".tools/**", ".git/**", "assets/**", "node_modules/**"]
 
 # Skylos treats test-classified paths as entry points, so Vulture supplies
 # dead-helper detection there. Names collected by pytest are entry points;
 # their function bodies and all other definitions remain checked.
 [tool.vulture]
-ignore_names = ["test_*", "pytestmark"]
+# `in_process_pool` is a fixture used through `usefixtures`: pytest calls it,
+# no code does.
+ignore_names = ["test_*", "pytestmark", "in_process_pool"]
 min_confidence = 60
 
 [tool.mutmut]
@@ -344,9 +353,19 @@ testpaths = ["tests"]
 package = true
 
 
+[[tool.duplication_gate.allow]]
+members = ["concordat_dashboard/catalogue.py::read_rule_info", "concordat_dashboard/catalogue.py::discover_rules"]
+reason = "Both functions read a manifest and refuse an unplaced package; the shared docstring and raise shape is incidental."
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+# The concordat pin is a direct (git) reference.
+allow-direct-references = true
+
+[project.scripts]
+concordat-dashboard = "concordat_dashboard.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["concordat_dashboard"]

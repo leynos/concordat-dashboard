@@ -1,0 +1,84 @@
+"""The publishing workflow keeps its privilege boundary and pins every action."""
+
+import pathlib
+import re
+import typing as typ
+
+import pytest
+import yaml
+
+WORKFLOW = pathlib.Path(__file__).parents[1] / ".github" / "workflows" / "pages.yml"
+FULL_SHA = re.compile(r"@[0-9a-f]{40}$")
+
+
+@pytest.fixture(scope="module")
+def workflow() -> dict[str, typ.Any]:
+    """Load the Pages workflow.
+
+    Returns
+    -------
+    dict[str, typ.Any]
+        The parsed workflow; PyYAML reads the `on` key as `True`.
+    """
+    return yaml.safe_load(WORKFLOW.read_text("utf-8"))
+
+
+def test_runs_on_a_schedule_and_on_demand(workflow: dict[str, typ.Any]) -> None:
+    """The page refreshes daily and can be rebuilt by hand."""
+    triggers = typ.cast("dict[bool, typ.Any]", workflow)[True]
+    assert "schedule" in triggers, "the sweep must be scheduled"
+    assert "workflow_dispatch" in triggers, "the sweep must be dispatchable"
+    assert "pull_request" not in triggers, "a pull request must not deploy"
+
+
+def test_the_build_sweeps_github_renders_and_uploads_the_site_directory(
+    workflow: dict[str, typ.Any],
+) -> None:
+    """The cron, the sweep command and the uploaded path are part of the contract."""
+    triggers = typ.cast("dict[bool, typ.Any]", workflow)[True]
+    steps = workflow["jobs"]["build"]["steps"]
+    commands = [step.get("run", "") for step in steps]
+    uploads = [s for s in steps if s.get("uses", "").startswith("actions/upload-pages")]
+    assert triggers["schedule"] == [{"cron": "17 4 * * *"}], "daily at 04:17 UTC"
+    assert any("make site LOCAL_ROOT=" in c for c in commands), "sweeps from GitHub"
+    assert [u["with"]["path"] for u in uploads] == ["site"], "uploads the site only"
+
+
+def test_default_token_is_read_only_and_only_deploy_can_write_pages(
+    workflow: dict[str, typ.Any],
+) -> None:
+    """Only the deploy job may write Pages or mint an OIDC token."""
+    jobs = workflow["jobs"]
+    assert workflow["permissions"] == {"contents": "read"}, "read-only default"
+    assert "permissions" not in jobs["build"], "build inherits the read-only default"
+    deploy = jobs["deploy"]["permissions"]
+    assert deploy == {"pages": "write", "id-token": "write"}, "deploy may publish"
+
+
+def test_deploy_waits_for_a_successful_build(workflow: dict[str, typ.Any]) -> None:
+    """A failed sweep leaves the previous page in place."""
+    assert workflow["jobs"]["deploy"]["needs"] == "build", "deploy needs build"
+
+
+def test_every_action_is_pinned_to_a_full_commit_sha(
+    workflow: dict[str, typ.Any],
+) -> None:
+    """A moved tag must not change what the workflow runs."""
+    uses = [
+        step["uses"]
+        for job in workflow["jobs"].values()
+        for step in job["steps"]
+        if "uses" in step
+    ]
+    unpinned = [u for u in uses if not FULL_SHA.search(u)]
+    assert uses, "the workflow uses actions"
+    assert not unpinned, f"actions not pinned to a full SHA: {unpinned}"
+
+
+def test_no_secret_is_referenced_and_both_jobs_run_on_github_hosted_runners(
+    workflow: dict[str, typ.Any],
+) -> None:
+    """The sweep needs only the built-in token, on GitHub-hosted runners."""
+    labels = {name: job["runs-on"] for name, job in workflow["jobs"].items()}
+    assert "secrets." not in WORKFLOW.read_text("utf-8"), "no secret may be referenced"
+    assert labels == {"build": "ubuntu-latest", "deploy": "ubuntu-latest"}, labels

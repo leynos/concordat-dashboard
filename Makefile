@@ -45,7 +45,7 @@ PYLINT = $(UV_ENV) $(UV) tool run --managed-python --python $(PYLINT_PYTHON) --f
 
 
 .PHONY: help all audit clean build build-release lint lint-python fmt check-fmt \
-        check-python-sources \
+        check-python-sources css sweep render site \
         markdownlint nixie spelling test typecheck dead-code duplication install-nose lint-actions validate $(TOOLS) $(VENV_TOOLS)
 
 .DEFAULT_GOAL := all
@@ -73,8 +73,38 @@ build-release: ## Build artefacts (sdist & wheel)
 	$(call ensure_uv)
 	$(UV_ENV) $(UV) run python -m build --sdist --wheel
 
+# The coupon: sweep the estate, render it, compile the stylesheet.
+BUN ?= bun
+SITE_DIR ?= site
+WORK_DIR ?= .work
+SWEEP_FILE ?= $(WORK_DIR)/sweep.json
+# Local sweeps read clones here; the scheduled run fetches from GitHub instead.
+LOCAL_ROOT ?= $(abspath ..)
+SWEEP_ARGS ?=
+
+node_modules: package.json bun.lock
+	$(BUN) install --frozen-lockfile
+	@touch node_modules
+
+css: node_modules ## Compile the Tailwind stylesheet and copy the fonts into the site
+	mkdir -p $(SITE_DIR)
+	$(BUN) x @tailwindcss/cli -i assets/coupon.css -o $(SITE_DIR)/coupon.css --minify
+	cp -r assets/fonts $(SITE_DIR)/
+
+# An empty LOCAL_ROOT (as in the scheduled run) fetches from GitHub instead.
+sweep: build ## Sweep local clones against every concordat rule (SWEEP_ARGS adds options)
+	$(UV_ENV) $(UV) run concordat-dashboard sweep $(SWEEP_FILE) \
+	  --workdir $(WORK_DIR)/trees --pin-cache $(WORK_DIR)/pins \
+	  $(if $(LOCAL_ROOT),--local-root $(LOCAL_ROOT)) $(SWEEP_ARGS)
+
+render: build css ## Render the sweep file into the static site
+	$(UV_ENV) $(UV) run concordat-dashboard render $(SWEEP_FILE) $(SITE_DIR)
+	cp $(SWEEP_FILE) $(SITE_DIR)/sweep.json
+
+site: sweep render ## Sweep, then render the site into $(SITE_DIR)
+
 clean: ## Remove build artefacts
-	rm -rf build dist *.egg-info \
+	rm -rf build dist *.egg-info $(SITE_DIR) $(WORK_DIR) node_modules \
 	  .mypy_cache .pytest_cache .coverage coverage.* \
 	  lcov.info htmlcov .venv .uv-cache .uv-tools \
 	  .typos-oxendict-base.json .typos-oxendict-base.toml

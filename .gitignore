@@ -211,3 +211,11 @@ target/
 
 # Verified duplication detector installed by df12-duplication.
 .tools/
+
+# Tailwind toolchain, sweep scratch and the generated site.
+node_modules/
+.work/
+site/
+
+# Lock file the duplication gate writes while recording an exception.
+.pyproject.toml.df12.lock

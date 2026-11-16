@@ -1,5 +1,56 @@
 # concordat-dashboard Users' Guide
 
+## Reading the coupon
+
+The published page lays every public, active, non-fork repository of the owner
+(one numbered row each) against every concordat rule package (one narrow column
+each), grouped under block headings. Each mark is one repository judged by one
+rule:
+
+- a faint tick: compliant;
+- a red underlined number: non-compliant, with that many findings;
+- a blue `?`: indeterminate, because the sweep could not prove a fact (for
+  example a Makefile target it cannot expand);
+- a blue boxed `E`: exempt, meaning an exemption is on record in the rule
+  package; and
+- hatching: not applicable, because the repository does not use the language
+  or tool the rule is about.
+
+Select a mark to read its finding text on the repository's own page. The
+Results block counts each state across a row, and the totals under the grid
+count them down each column. The Head column holds the commit swept, and the
+footer records the concordat commit that supplied the rules.
+
+Excluded from the sweep are forks, archived repositories and empty repositories
+(no commit to fetch); private repositories are never listed, and the page says
+only how many there are when that count is known.
+
+## Building the coupon locally
+
+Run `make site` to sweep the clones under `LOCAL_ROOT` (default: the parent
+directory) and write the site to `site/`. The steps are also available alone:
+
+- `make sweep` writes `.work/sweep.json`;
+- `make css` compiles the Tailwind stylesheet with the pinned `bun` toolchain;
+  and
+- `make render` renders `.work/sweep.json` into `site/`.
+
+`make site LOCAL_ROOT=` fetches every repository from GitHub instead, which is
+what the scheduled workflow does. `SWEEP_ARGS` passes extra options to the
+sweep, for example `SWEEP_ARGS="--only whitaker --only cuprum"` to sweep two
+repositories while developing. The sweep needs `conftest` and `makeutil` on
+`PATH` (the rule packages run them) and a GitHub login for `gh` or a
+`GITHUB_TOKEN`.
+
+## Publication
+
+`.github/workflows/pages.yml` runs daily at 04:17 UTC and on demand. It sweeps
+the public repositories on a GitHub-hosted runner, renders the site and deploys
+it with GitHub Pages. A failed sweep leaves the previous page in place. A
+repository-scoped Actions token cannot see private repositories, so set the
+repository variable `PRIVATE_REPOSITORY_COUNT` to show their count; leave it
+unset to omit the line.
+
 ## Quality Gates
 
 Before the first quality-gate run, initialize Git at the generated project root
