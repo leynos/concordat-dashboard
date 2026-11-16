@@ -1,0 +1,140 @@
+{% extends "base.html.j2" %}
+{% block title %}Copy Coupon: concordat compliance for {{ page.owner }}{% endblock %}
+{% block content %}
+
+  {# Masthead: headline, date, and the big stake. #}
+  <header class="flex flex-wrap items-end justify-between gap-x-6 gap-y-1 border-b-4 border-double border-ink pt-3 pb-2">
+    <div>
+      <h1 class="font-black uppercase leading-none tracking-tight text-print-red text-[3rem] sm:text-[3.8rem]">Copy coupon</h1>
+      <p class="mt-1 text-[13px] font-bold uppercase tracking-wide">
+        For matches played · <span class="text-[15px]">{{ page.date_long }}</span>
+      </p>
+    </div>
+    <div class="text-center">
+      <p class="text-[13px] font-bold uppercase tracking-wider">Not acceptable as an entry</p>
+      <p class="font-black leading-none text-ink text-[2.8rem] sm:text-[3.4rem]">
+        <span class="text-print-red">{{ coupon.findings }}</span>
+        <span class="align-middle text-[1.1rem] uppercase">findings</span>
+      </p>
+    </div>
+    <div class="text-right text-[13px] uppercase leading-tight tracking-wide">
+      <p class="text-[17px] font-black">{{ page.owner }} · concordat</p>
+      <p>{{ coupon.rows | length }} repositories · {{ coupon.columns | length }} rules</p>
+      <p>Treble-chance compliance pools</p>
+    </div>
+  </header>
+
+  <p class="mt-1 flex flex-wrap justify-between gap-x-4 border-b border-ink/60 pb-1 text-[12px] uppercase tracking-wide">
+    <span>Rules: concordat {{ page.concordat_version }} @ <code>{{ page.concordat_commit[:12] }}</code></span>
+    <span>Each repository at its default branch head (SHA in the Head column)</span>
+  </p>
+
+  {# Key, so no mark is ever guessed. #}
+  <section aria-labelledby="key-h" class="my-2 flex flex-wrap items-center gap-x-4 gap-y-1 border border-ink bg-paper-deep/60 px-2 py-1 text-[13px]">
+    <h2 id="key-h" class="font-black uppercase tracking-wide">Key</h2>
+    <span><b class="inline-block w-5 border border-rule text-center font-normal text-ink/45">&#10003;</b> compliant</span>
+    <span><b class="inline-block w-5 border border-rule bg-print-red/10 text-center font-black text-print-red underline decoration-2">3</b> non-compliant (count of findings)</span>
+    <span><b class="inline-block w-5 border border-rule bg-paper-deep text-center font-black text-pencil">?</b> indeterminate (could not be proven)</span>
+    <span><b class="inline-block w-5 border border-rule text-center font-bold text-pencil"><span class="inline-block w-4 border border-pencil">E</span></b> exempt (exemption on record)</span>
+    <span><b class="cell-not_applicable inline-block h-4 w-5 border border-rule align-middle"></b> not applicable</span>
+    <span class="text-[12px]">Select a mark for its finding text.</span>
+  </section>
+
+  <div class="flex items-start gap-2">
+  <div id="coupon" class="min-w-0 flex-1 overflow-x-auto border-2 border-ink bg-paper" tabindex="-1">
+    <table class="w-full border-collapse text-[14px]">
+      <caption class="sr-only">
+        Concordat compliance of {{ coupon.rows | length }} repositories against {{ coupon.columns | length }} rules.
+        Each row is a repository; each column a rule. A mark states compliant, non-compliant with a finding count, indeterminate, exempt or not applicable.
+      </caption>
+      <thead>
+        <tr class="border-b-2 border-ink">
+          <th rowspan="2" scope="col" class="hidden w-8 min-w-8 border border-rule px-1 text-right align-bottom text-[12px] uppercase sm:table-cell">No.</th>
+          <th rowspan="2" scope="col" class="sticky left-0 z-20 min-w-[8.5rem] border border-rule border-r-2 border-r-ink bg-paper px-1 text-left align-bottom text-[14px] font-black uppercase tracking-wide sm:min-w-[11.5rem]">Repository</th>
+          <th rowspan="2" scope="col" class="hidden w-14 min-w-14 border border-rule px-1 text-left align-bottom text-[12px] uppercase sm:table-cell">Head</th>
+          {% for block in coupon.blocks %}
+          <th colspan="{{ block.span }}" scope="colgroup" class="block-gap whitespace-nowrap border border-rule bg-ink px-1 py-0.5 text-center text-[13px] font-black uppercase tracking-wider text-paper">
+            {{ block.name }} <span class="font-normal">{{ block.span }}</span>
+          </th>
+          {% endfor %}
+          <th colspan="6" scope="colgroup" class="block-gap border border-rule bg-print-red px-1 py-0.5 text-center text-[13px] font-black uppercase tracking-wider text-paper">Results</th>
+          <th rowspan="2" scope="col" class="hidden w-8 min-w-8 border border-rule px-1 text-left align-bottom text-[12px] uppercase sm:table-cell">No.</th>
+        </tr>
+        <tr>
+          {% for column in coupon.columns %}
+          <th scope="col" title="{{ column.rule.name }} (v{{ column.rule.version }}){% if column.rule.applies_to %}; applies to {{ column.rule.applies_to.value }} repositories{% endif %}"
+              class="{{ 'block-gap ' if column.is_first_in_block }}h-[170px] w-[22px] min-w-[22px] border border-rule p-0 align-bottom">
+            <span class="mx-auto block rotate-180 whitespace-nowrap pb-1 text-[12.5px] font-bold leading-[22px] [writing-mode:vertical-rl]">{{ column.rule.id }}</span>
+          </th>
+          {% endfor %}
+          {% for label in result_labels %}
+          <th scope="col" title="{{ result_titles[loop.index0] }}" class="{{ 'block-gap ' if loop.first }}h-[170px] w-[22px] min-w-[22px] border border-rule p-0 align-bottom">
+            <span class="mx-auto block rotate-180 whitespace-nowrap pb-1 text-[12.5px] font-bold leading-[22px] [writing-mode:vertical-rl]">{{ label }}</span>
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in coupon.rows %}
+        <tr class="{{ 'border-b-2 border-b-ink ' if row.number % 5 == 0 }}hover:bg-paper-deep/70">
+          <td class="hidden border border-rule px-1 text-right text-[13px] tabular-nums sm:table-cell">{{ row.number }}</td>
+          <th scope="row" class="sticky left-0 z-10 max-w-[8.5rem] min-w-[8.5rem] truncate border border-rule border-r-2 border-r-ink bg-paper px-1 text-left text-[15px] font-bold sm:max-w-[11.5rem] sm:min-w-[11.5rem]">
+            <a href="repos/{{ row.name }}.html" class="hover:underline">{{ row.name }}</a>
+          </th>
+          <td class="hidden border border-rule px-1 font-mono text-[10px] tracking-tighter sm:table-cell"><a href="{{ row.url }}/commit/{{ row.sha }}" title="{{ row.sha }}">{{ row.sha[:7] }}</a></td>
+          {% for mark in row.marks %}
+          <td class="cell cell-{{ mark.state }}{{ ' block-gap' if coupon.columns[loop.index0].is_first_in_block }}">
+            {%- if mark.href -%}
+            <a href="{{ mark.href }}" title="{{ mark.title }}"><span aria-hidden="true">{{ mark.glyph }}</span><span class="sr-only">{{ mark.label }}</span></a>
+            {%- else -%}
+            <span title="{{ mark.title }}"><span aria-hidden="true">{{ mark.glyph }}</span><span class="sr-only">{{ mark.label }}</span></span>
+            {%- endif -%}
+          </td>
+          {% endfor %}
+          {% for value in row.results %}
+          <td class="cell tabular-nums {{ 'block-gap ' if loop.first }}{{ 'font-black text-print-red' if loop.index == 2 and value }}">{{ value }}</td>
+          {% endfor %}
+          <td class="hidden border border-rule px-1 text-[13px] tabular-nums sm:table-cell">{{ row.number }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="border-t-4 border-double border-ink">
+        {% for line in coupon.footer %}
+        <tr>
+          <td class="hidden border border-rule bg-paper-deep sm:table-cell"></td>
+          <th scope="row" class="sticky left-0 z-10 border border-rule border-r-2 border-r-ink bg-paper-deep px-1 text-right text-[13px] font-black uppercase tracking-wide">{{ line.label }}</th>
+          <td class="hidden border border-rule bg-paper-deep sm:table-cell"></td>
+          {% for value in line.cells %}
+          <td class="cell tabular-nums bg-paper-deep/60 {{ 'block-gap' if value.is_first_in_block }}">{{ value.count }}</td>
+          {% endfor %}
+          <td colspan="6" class="block-gap border border-rule bg-paper-deep/60 px-1 text-[13px] font-black tabular-nums">= {{ line.total }}</td>
+          <td class="hidden border border-rule bg-paper-deep sm:table-cell"></td>
+        </tr>
+        {% endfor %}
+      </tfoot>
+    </table>
+  </div>
+  {# A pencil annotation in the margin: decorative, so hidden from assistive technology. #}
+  <p aria-hidden="true" class="hidden shrink-0 select-none whitespace-nowrap pt-40 font-hand text-[19px] italic leading-none text-pencil/80 [writing-mode:vertical-rl] lg:block">
+    {{ coupon.rows | length }} lines @ {{ coupon.columns | length }} rules = {{ coupon.marks }} marks &mdash; checked {{ page.date_short }}
+  </p>
+  </div>
+
+  <div class="mt-3 grid gap-3 md:grid-cols-[1fr_16rem]">
+    <section aria-labelledby="stakes-h" class="border-2 border-ink p-2">
+      <h2 id="stakes-h" class="bg-ink px-2 py-0.5 text-[17px] font-black uppercase tracking-widest text-paper">Stakes</h2>
+      <dl class="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5 text-[14px] sm:grid-cols-5">
+        {% for stake in coupon.stakes %}
+        <div class="border-b border-rule"><dt class="text-[12px] uppercase">{{ stake.label }}</dt><dd class="text-[26px] font-black leading-none tabular-nums {{ stake.tone }}">{{ stake.value }}</dd></div>
+        {% endfor %}
+      </dl>
+      <p class="mt-2 text-[13px]">
+        Left out of the sweep: {{ excluded.forks }} forks and {{ excluded.archived }} archived repositories{% if excluded.private is not none %}; {{ excluded.private }} private repositories not shown{% endif %}.
+      </p>
+    </section>
+    <aside class="border-2 border-print-red p-2 text-center font-black uppercase leading-tight text-print-red">
+      <p class="text-[20px]">Keep a correct copy of your entry</p>
+      <p class="mt-1 text-[12px] font-bold text-ink">The rules version and every repository's head SHA are recorded here. Rebuilt on a schedule from the public repositories.</p>
+    </aside>
+  </div>
+{% endblock %}
