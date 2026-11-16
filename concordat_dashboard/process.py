@@ -59,14 +59,13 @@ def _run(program: Program, args: tuple[str, ...]) -> str:
         # run reaches its child-termination path.
         result = asyncio.run(asyncio.wait_for(command.run(), DEADLINE_SECONDS))
     except TimeoutError as error:
-        summary = (
-            f"{program} {' '.join(args[:3])} timed out after {DEADLINE_SECONDS:g}s"
-        )
+        # No arguments in the summary: they can hold a checkout path.
+        summary = f"{program} timed out after {DEADLINE_SECONDS:g}s"
         raise CommandFailedError(summary, summary) from error
     if not result.ok:
         # cuprum 0.1.0 types the streams as optional; they are captured here.
         detail = (result.stderr or "").strip()[-300:]
-        summary = f"{program} {' '.join(args[:3])} failed ({result.exit_code})"
+        summary = f"{program} failed ({result.exit_code})"
         message = f"{summary}: {detail}"
         raise CommandFailedError(message, summary)
     return result.stdout or ""

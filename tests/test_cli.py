@@ -1,12 +1,20 @@
 """The commands write and read the sweep file and the site."""
 
+import sys
+import traceback
 import typing as typ
 
 import pytest
 
 from concordat_dashboard import cli
-from concordat_dashboard.estate import Estate, IncompleteListingError
+from concordat_dashboard import estate as estate_module
+from concordat_dashboard.estate import (
+    Estate,
+    IncompleteListingError,
+    ListingFailedError,
+)
 from concordat_dashboard.model import Excluded
+from concordat_dashboard.process import CommandFailedError
 from concordat_dashboard.serialize import dumps, loads
 
 if typ.TYPE_CHECKING:
@@ -76,6 +84,37 @@ def test_a_truncated_listing_stops_the_sweep_without_writing_a_file(
     with pytest.raises(IncompleteListingError):
         cli.app(["sweep", str(out)], result_action="return_value")
     assert not out.exists(), "no sweep file is written"
+
+
+def test_a_failed_listing_exposes_no_gh_output_on_any_stream(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The stderr of `gh` may name a private repository; the CLI must not print it."""
+
+    def refuse(*_args: str) -> str:
+        """Fail as `gh repo list` with a revealing stderr would.
+
+        Raises
+        ------
+        CommandFailedError
+            Always.
+        """
+        full = "gh failed (1): could not resolve leynos/a-private-repository"
+        raise CommandFailedError(full, "gh failed (1)")
+
+    monkeypatch.setattr(estate_module, "gh", refuse)
+    monkeypatch.setattr(
+        sys, "argv", ["concordat-dashboard", "sweep", str(tmp_path / "s")]
+    )
+    with pytest.raises(ListingFailedError) as caught:
+        cli.main()
+    shown = "".join(traceback.format_exception(caught.value))
+    streams = capsys.readouterr()
+    everything = shown + streams.out + streams.err
+    assert "a-private-repository" not in everything, "gh output reached a stream"
+    assert "gh failed (1)" in shown, "the safe summary is reported"
 
 
 def test_render_of_a_missing_sweep_file_fails(tmp_path: pathlib.Path) -> None:

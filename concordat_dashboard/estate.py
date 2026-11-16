@@ -10,7 +10,7 @@ import json
 import typing as typ
 
 from .model import Excluded
-from .process import gh
+from .process import CommandFailedError, gh
 
 PUBLIC = "PUBLIC"
 LIST_FIELDS = "name,isFork,isArchived,isEmpty,visibility"
@@ -19,6 +19,10 @@ LIST_LIMIT = 1000
 
 class IncompleteListingError(RuntimeError):
     """The repository listing may be truncated, so coverage would be partial."""
+
+
+class ListingFailedError(RuntimeError):
+    """`gh` could not list the repositories."""
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -93,8 +97,18 @@ def list_estate(owner: str, hidden_private: int | None = None) -> Estate:
     ------
     IncompleteListingError
         If the listing reached the request limit, so repositories may be missing.
+    ListingFailedError
+        If `gh` fails; the message is a safe summary, never `gh`'s own output.
     """
-    raw = gh("repo", "list", owner, "--limit", str(LIST_LIMIT), "--json", LIST_FIELDS)
+    try:
+        raw = gh(
+            "repo", "list", owner, "--limit", str(LIST_LIMIT), "--json", LIST_FIELDS
+        )
+    except CommandFailedError as error:
+        # `from None`: an uncaught traceback must not print gh's stderr, which
+        # could name a repository or carry a credential.
+        message = f"the repository listing failed: {error.public_summary}"
+        raise ListingFailedError(message) from None
     rows = json.loads(raw)
     if len(rows) >= LIST_LIMIT:
         message = f"the listing reached its limit of {LIST_LIMIT}; raise LIST_LIMIT"
