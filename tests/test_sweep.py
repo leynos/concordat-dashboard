@@ -12,7 +12,7 @@ from concordat_dashboard import cli
 from concordat_dashboard import sweep as sweep_module
 from concordat_dashboard.catalogue import PLACEMENTS
 from concordat_dashboard.classify import RawFinding
-from concordat_dashboard.estate import Estate
+from concordat_dashboard.estate import Estate, classify_repositories
 from concordat_dashboard.model import Excluded, Exemption, RuleInfo, State, Trait
 from concordat_dashboard.sweep import (
     Locations,
@@ -217,15 +217,24 @@ def test_cli_sweep_then_render_publishes_the_finding_text(
     clone: pathlib.Path, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The whole path: list, sweep, persist as JSON, render pages from the file."""
-    estate = Estate(("demo",), Excluded(0, 0, None))
-    monkeypatch.setattr(cli, "list_estate", lambda *_args: estate)
+    row = {"name": "demo", "isFork": False, "isArchived": False, "visibility": "PUBLIC"}
+    monkeypatch.setattr(
+        cli,
+        "list_estate",
+        lambda _owner, hidden: classify_repositories([row], hidden),
+    )
     monkeypatch.setattr(cli, "build_config", lambda *_args: _config(clone.parent))
     sweep_file, site = tmp_path / "sweep.json", tmp_path / "site"
-    cli.app(["sweep", str(sweep_file)], result_action="return_value")
+    cli.app(
+        ["sweep", str(sweep_file), "--hidden-private", "11"],
+        result_action="return_value",
+    )
     cli.app(["render", str(sweep_file), str(site)], result_action="return_value")
     page = (site / "repos" / "demo.html").read_text("utf-8")
+    index = (site / "index.html").read_text("utf-8")
     assert "R-1" in page, "the finding code is on the detail page"
     assert 'id="always-red"' in page, "the rule has an anchor"
+    assert "11 private repositories not shown" in index, "--hidden-private reaches it"
 
 
 def test_build_config_discovers_the_pinned_rules_and_hides_the_token(
