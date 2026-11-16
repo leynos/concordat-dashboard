@@ -4,7 +4,6 @@ import concurrent.futures as cf
 import dataclasses
 import datetime as dt
 import pathlib
-import re
 import typing as typ
 
 import pytest
@@ -16,6 +15,7 @@ from concordat_dashboard.classify import RawFinding
 from concordat_dashboard.estate import Estate, classify_repositories
 from concordat_dashboard.model import Excluded, Exemption, RuleInfo, State, Trait
 from concordat_dashboard.sweep import (
+    Clocks,
     Locations,
     SweepConfig,
     SweepDegradedError,
@@ -208,15 +208,21 @@ def test_run_sweep_uses_the_injected_clock_and_keeps_the_estate_counts(
     """The sweep's timestamp, exclusions and row order come from its inputs."""
     estate = Estate(("zzz-ghost", "demo"), Excluded(2, 1, 7, 3))
     moment = dt.datetime(2026, 11, 16, 4, 17, tzinfo=dt.UTC)
+    ticks = iter([100.0, 142.0])
+    clocks = Clocks(now=lambda: moment, monotonic=lambda: next(ticks))
     with caplog.at_level("INFO"):
-        swept = run_sweep(_config(clone.parent), estate, 2, clock=lambda: moment)
+        swept = run_sweep(_config(clone.parent), estate, 2, clocks)
     assert swept.generated_at == "2026-11-16T04:17:00+00:00", "injected clock"
     assert swept.excluded == Excluded(2, 1, 7, 3), "exclusions pass through"
     assert [r.name for r in swept.repos] == ["demo", "zzz-ghost"], "name order"
     assert len(swept.concordat_commit) == 40, "the pinned commit is recorded"
-    assert re.search(r"swept 2 repositories in \d+s", caplog.text), "closing summary"
-    assert "noncompliant" in caplog.text, "the summary counts the marks"
-    assert "DEGRADED: 1 of 2 repositories failed" in caplog.text, "a partial failure"
+    expected = (
+        "swept 2 repositories in 42s",
+        "noncompliant",
+        "DEGRADED: 1 of 2 repositories failed",
+    )
+    missing = [line for line in expected if line not in caplog.text]
+    assert not missing, f"the closing log lacks: {missing}"
 
 
 def test_a_fully_degraded_run_is_an_error_and_a_partial_one_is_not(

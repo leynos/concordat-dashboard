@@ -227,6 +227,25 @@ def _utc_now() -> dt.datetime:
     return dt.datetime.now(dt.UTC)
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class Clocks:
+    """The two clocks a sweep reads, injectable so a test is deterministic.
+
+    Attributes
+    ----------
+    now
+        Supplies the timestamp printed on the page.
+    monotonic
+        Supplies seconds for the elapsed-time log line; never goes backwards.
+    """
+
+    now: cabc.Callable[[], dt.datetime] = _utc_now
+    monotonic: cabc.Callable[[], float] = time.monotonic
+
+
+SYSTEM_CLOCKS = Clocks()
+
+
 def collect(
     pool: cf.Executor, names: tuple[str, ...], config: SweepConfig
 ) -> tuple[RepoResult, ...]:
@@ -292,7 +311,7 @@ def run_sweep(
     config: SweepConfig,
     estate: Estate,
     workers: int,
-    clock: cabc.Callable[[], dt.datetime] = _utc_now,
+    clocks: Clocks = SYSTEM_CLOCKS,
 ) -> Sweep:
     """Sweep every repository in *estate*, in parallel across processes.
 
@@ -304,8 +323,9 @@ def run_sweep(
         The repositories to sweep and the exclusion counts.
     workers
         How many repositories to sweep at once.
-    clock
-        Supplies the sweep's timestamp; injectable so a test is deterministic.
+    clocks
+        The wall clock for the page timestamp and the monotonic clock for the
+        elapsed-time log line.
 
     Returns
     -------
@@ -313,14 +333,14 @@ def run_sweep(
         All results, rows in name order; a run in which every repository
         failed raises `SweepDegradedError` instead.
     """
-    started = time.monotonic()
+    started = clocks.monotonic()
     with cf.ProcessPoolExecutor(max_workers=workers) as pool:
         repos = collect(pool, estate.names, config)
-    log_outcome(repos, time.monotonic() - started)
+    log_outcome(repos, clocks.monotonic() - started)
     version, commit = concordat_identity()
     return Sweep(
         owner=config.owner,
-        generated_at=clock().isoformat(timespec="seconds"),
+        generated_at=clocks.now().isoformat(timespec="seconds"),
         concordat_version=version,
         concordat_commit=commit,
         rules=config.rules,
