@@ -4,7 +4,7 @@ The coupon is a static page that lays the estate's repositories (numbered rows)
 against concordat's rule packages (narrow ruled columns grouped under printed
 block headings), in the manner of a 1963 football pools coupon. The decisions
 behind the marks and the sweep are in
-[ADR 001](adr-001-coupon-marks-and-sweep-shape.md).
+[ADR 001](adrs/adr-0001-coupon-marks-and-sweep-shape.md).
 
 ## Data flow
 

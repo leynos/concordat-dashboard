@@ -5,8 +5,8 @@ This guide explains the contributor workflow for the generated project.
 ## Architecture
 
 [Coupon design](design.md) describes the data flow and modules, and
-[ADR 001](adr-001-coupon-marks-and-sweep-shape.md) records why the marks are
-derived the way they are.
+[ADR 001](adrs/adr-0001-coupon-marks-and-sweep-shape.md) records why the marks
+are derived the way they are.
 
 ### Adding or bumping a concordat rule
 
