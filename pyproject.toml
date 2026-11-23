@@ -20,7 +20,7 @@ dev = [
     "pytest",
     "interrogate",
     "pip-audit",
-    "ruff==0.16.8",
+    "ruff==0.17.6",
     "types-pyyaml",
     "pyright",
     "ty==0.0.56",
