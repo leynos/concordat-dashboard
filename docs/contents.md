@@ -17,7 +17,7 @@ below.
 
 - [Coupon design](design.md) describes the sweep's data flow, the modules, and
   the accessibility and styling approach.
-- [ADR 001: Coupon marks and sweep shape](adr-001-coupon-marks-and-sweep-shape.md)
+- [ADR 001: Coupon marks and sweep shape](adrs/adr-0001-coupon-marks-and-sweep-shape.md)
   records how the five marks are derived and where the sweep runs.
 
 ## Engineering practice
