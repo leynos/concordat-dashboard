@@ -48,6 +48,13 @@ def test_declared_columns_follow_placements_order() -> None:
     assert declared == [i for i in PLACEMENTS if i in declared], "placements order"
 
 
+def test_each_block_is_one_run_of_adjacent_columns() -> None:
+    """A split block would repeat its heading on the coupon."""
+    blocks = [placement.block for placement in PLACEMENTS.values()]
+    runs = [block for i, block in enumerate(blocks) if i == 0 or block != blocks[i - 1]]
+    assert len(runs) == len(set(runs)), f"a block is split across columns: {runs}"
+
+
 def test_unknown_package_becomes_a_new_rules_column(
     tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
