@@ -45,7 +45,7 @@ PYLINT = $(UV_ENV) $(UV) tool run --managed-python --python $(PYLINT_PYTHON) --f
 
 
 .PHONY: help all audit clean build build-release lint lint-python fmt check-fmt \
-        check-python-sources css sweep render site \
+        check-python-sources css concordat-ref sweep render site \
         markdownlint nixie spelling test typecheck dead-code duplication install-nose lint-actions validate $(TOOLS) $(VENV_TOOLS)
 
 .DEFAULT_GOAL := all
@@ -81,6 +81,15 @@ SWEEP_FILE ?= $(WORK_DIR)/sweep.json
 # Local sweeps read clones here; the scheduled run fetches from GitHub instead.
 LOCAL_ROOT ?= $(abspath ..)
 SWEEP_ARGS ?=
+# The concordat rules to sweep with. Unset, the sweep uses the commit that
+# pyproject.toml and uv.lock pin. Set (the scheduled run uses `main`), that git
+# ref is installed over the locked environment on every run; the lock stays the
+# floor for tests, and an unreachable ref fails the build rather than falling
+# back to the pin.
+CONCORDAT_REF ?=
+CONCORDAT_URL ?= git+https://github.com/leynos/concordat.git
+# A ref install must not be undone by `uv run` re-syncing to the lock.
+DASHBOARD = $(UV_ENV) $(UV) run $(if $(CONCORDAT_REF),--no-sync) concordat-dashboard
 
 node_modules: package.json bun.lock
 	$(BUN) install --frozen-lockfile
@@ -91,14 +100,23 @@ css: node_modules ## Compile the Tailwind stylesheet and copy the fonts into the
 	$(BUN) x @tailwindcss/cli -i assets/coupon.css -o $(SITE_DIR)/coupon.css --minify
 	cp -r assets/fonts $(SITE_DIR)/
 
+concordat-ref: build ## Install concordat at CONCORDAT_REF over the locked environment (no-op when unset)
+ifneq ($(CONCORDAT_REF),)
+	$(UV_ENV) $(UV) pip install --python .venv --reinstall-package concordat \
+	  --refresh-package concordat "concordat @ $(CONCORDAT_URL)@$(CONCORDAT_REF)"
+	$(DASHBOARD) concordat
+else
+	@:
+endif
+
 # An empty LOCAL_ROOT (as in the scheduled run) fetches from GitHub instead.
-sweep: build ## Sweep local clones against every concordat rule (SWEEP_ARGS adds options)
-	$(UV_ENV) $(UV) run concordat-dashboard sweep $(SWEEP_FILE) \
+sweep: build concordat-ref ## Sweep local clones against every concordat rule (SWEEP_ARGS adds options)
+	$(DASHBOARD) sweep $(SWEEP_FILE) \
 	  --workdir $(WORK_DIR)/trees --pin-cache $(WORK_DIR)/pins \
 	  $(if $(LOCAL_ROOT),--local-root $(LOCAL_ROOT)) $(SWEEP_ARGS)
 
-render: build css ## Render the sweep file into the static site
-	$(UV_ENV) $(UV) run concordat-dashboard render $(SWEEP_FILE) $(SITE_DIR)
+render: build concordat-ref css ## Render the sweep file into the static site
+	$(DASHBOARD) render $(SWEEP_FILE) $(SITE_DIR)
 	cp $(SWEEP_FILE) $(SITE_DIR)/sweep.json
 
 site: sweep render ## Sweep, then render the site into $(SITE_DIR)

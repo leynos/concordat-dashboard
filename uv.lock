@@ -249,7 +249,7 @@ wheels = [
 [[package]]
 name = "concordat"
 version = "0.1.0"
-source = { git = "https://github.com/leynos/concordat.git?rev=e9d254f4439e39c74657037c89bb749ee4372345#e9d254f4439e39c74657037c89bb749ee4372345" }
+source = { git = "https://github.com/leynos/concordat.git?rev=9c4d23df6447eacc88e8dff4968ea80e4e4526a8#9c4d23df6447eacc88e8dff4968ea80e4e4526a8" }
 dependencies = [
     { name = "boto3" },
     { name = "cyclopts" },
@@ -290,7 +290,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "concordat", git = "https://github.com/leynos/concordat.git?rev=e9d254f4439e39c74657037c89bb749ee4372345" },
+    { name = "concordat", git = "https://github.com/leynos/concordat.git?rev=9c4d23df6447eacc88e8dff4968ea80e4e4526a8" },
     { name = "cuprum", specifier = ">=0.1.0" },
     { name = "cyclopts", specifier = "==4.25.2" },
     { name = "jinja2", specifier = ">=3.1" },

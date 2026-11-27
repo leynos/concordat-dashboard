@@ -40,6 +40,7 @@ if typ.TYPE_CHECKING:
 LOG = logging.getLogger(__name__)
 API_URL = "https://api.github.com"
 INDETERMINATE = "indeterminate"
+UNKNOWN_COMMIT = "unknown"
 
 
 def github_token() -> str | None:
@@ -86,7 +87,7 @@ def concordat_identity() -> tuple[str, str]:
     """
     dist = importlib.metadata.distribution("concordat")
     raw = dist.read_text("direct_url.json") or "{}"
-    commit = json.loads(raw).get("vcs_info", {}).get("commit_id", "unknown")
+    commit = json.loads(raw).get("vcs_info", {}).get("commit_id", UNKNOWN_COMMIT)
     return dist.version, commit
 
 

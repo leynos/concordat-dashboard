@@ -2,11 +2,8 @@
 
 import typing as typ
 
-import pytest
-
 from concordat_dashboard.catalogue import (
     PLACEMENTS,
-    UnknownPackageError,
     discover_rules,
     exemptions_by_repository,
     read_rule_info,
@@ -16,6 +13,8 @@ from concordat_dashboard.runner import packages_root, rule_defaults
 
 if typ.TYPE_CHECKING:
     import pathlib
+
+    import pytest
 
 
 def _write_package(root: pathlib.Path, rule_id: str) -> pathlib.Path:
@@ -34,32 +33,56 @@ def _write_package(root: pathlib.Path, rule_id: str) -> pathlib.Path:
     return package
 
 
-def test_every_installed_package_has_a_placement() -> None:
-    """A new concordat package must be placed on the coupon deliberately."""
+def test_every_installed_package_becomes_a_column() -> None:
+    """No package the installed concordat ships may be dropped from the coupon."""
     installed = {
         p.name for p in packages_root().iterdir() if (p / "rule.yaml").is_file()
     }
-    assert installed == set(PLACEMENTS), "concordat and PLACEMENTS disagree"
+    assert {r.id for r in discover_rules(packages_root())} == installed, "columns"
 
 
-def test_discovery_orders_columns_as_declared() -> None:
-    """Columns follow PLACEMENTS, not directory order."""
+def test_declared_columns_follow_placements_order() -> None:
+    """Columns the table declares follow PLACEMENTS, not directory order."""
     rules = discover_rules(packages_root())
-    assert [r.id for r in rules] == list(PLACEMENTS), "columns must follow PLACEMENTS"
+    declared = [r.id for r in rules if r.id in PLACEMENTS]
+    assert declared == [i for i in PLACEMENTS if i in declared], "placements order"
 
 
-def test_unknown_package_is_refused(tmp_path: pathlib.Path) -> None:
-    """A package with no placement fails loudly rather than vanishing."""
+def test_unknown_package_becomes_a_new_rules_column(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A package with no placement still appears, and the run says so."""
     package = _write_package(tmp_path, "brand-new-rule")
-    with pytest.raises(UnknownPackageError, match="brand-new-rule"):
-        read_rule_info(package)
+    info = read_rule_info(package)
+    assert (info.block, info.applies_to) == ("NEW RULES", None), "unplaced column"
+    err = capsys.readouterr().err
+    assert "::warning title=Unplaced rule::" in err, "a workflow annotation"
+    assert "brand-new-rule" in err, "the annotation names the package"
 
 
-def test_missing_declared_package_is_refused(tmp_path: pathlib.Path) -> None:
-    """A declared package that concordat no longer ships fails loudly."""
+def test_unknown_packages_follow_the_declared_ones_by_id(
+    tmp_path: pathlib.Path,
+) -> None:
+    """New rules sort after every declared column, in a stable order."""
+    for rule_id in ("zzz-new", "uv-gate-baseline", "aaa-new", "yaml-lint-baseline"):
+        _write_package(tmp_path, rule_id)
+    rules = discover_rules(tmp_path)
+    assert [r.id for r in rules] == [
+        "uv-gate-baseline",
+        "yaml-lint-baseline",
+        "aaa-new",
+        "zzz-new",
+    ], "declared first, then new rules by id"
+
+
+def test_missing_declared_package_is_dropped_with_a_warning(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A declared package that concordat no longer ships is dropped, loudly."""
     _write_package(tmp_path, "uv-gate-baseline")
-    with pytest.raises(UnknownPackageError, match="absent"):
-        discover_rules(tmp_path)
+    rules = discover_rules(tmp_path)
+    assert [r.id for r in rules] == ["uv-gate-baseline"], "only what is shipped"
+    assert "::warning title=Absent rule::" in capsys.readouterr().err, "annotation"
 
 
 def test_rule_info_reads_manifest_and_placement(tmp_path: pathlib.Path) -> None:

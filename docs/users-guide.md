@@ -45,11 +45,12 @@ repositories while developing. The sweep needs `conftest` and `makeutil` on
 ## Publication
 
 `.github/workflows/pages.yml` runs daily at 04:17 UTC and on demand. It sweeps
-the public repositories on a GitHub-hosted runner, renders the site and deploys
-it with GitHub Pages. A failed sweep leaves the previous page in place. A
-repository-scoped Actions token cannot see private repositories, so set the
-repository variable `PRIVATE_REPOSITORY_COUNT` to show their count; leave it
-unset to omit the line.
+the public repositories on a GitHub-hosted runner with the rules from
+concordat's current main (the footer names the commit), renders the site and
+deploys it with GitHub Pages. A concordat main that cannot be installed fails
+the run. A failed sweep leaves the previous page in place. A repository-scoped
+Actions token cannot see private repositories, so set the repository variable
+`PRIVATE_REPOSITORY_COUNT` to show their count; leave it unset to omit the line.
 
 ## Quality Gates
 

@@ -3,13 +3,14 @@
 import dataclasses
 import logging
 import pathlib
+import sys
 import typing as typ
 
 import cyclopts
 
 from .estate import list_estate
 from .render import write_site
-from .runner import github_token
+from .runner import UNKNOWN_COMMIT, concordat_identity, github_token
 from .serialize import dumps, loads
 from .sweep import Locations, build_config, run_sweep
 
@@ -107,6 +108,27 @@ def render(sweep_file: pathlib.Path, out: pathlib.Path) -> None:
     """
     count = write_site(loads(sweep_file.read_text("utf-8")), out)
     print(f"wrote {count} pages to {out}")
+
+
+@app.command
+def concordat() -> None:
+    """Print the concordat version and commit that supply the rules.
+
+    The scheduled workflow records this line, so the run shows which concordat
+    commit it swept with. A concordat that was not installed from a git
+    reference has no commit to name, so the command fails rather than let a
+    coupon claim rules it cannot identify.
+
+    Raises
+    ------
+    SystemExit
+        If the installed concordat has no commit identity.
+    """
+    version, commit = concordat_identity()
+    if commit == UNKNOWN_COMMIT:
+        sys.stderr.write("::error title=Unknown concordat::no commit identity\n")
+        raise SystemExit(1)
+    print(f"concordat {version} @ {commit}")
 
 
 def main() -> None:

@@ -270,6 +270,6 @@ def test_build_config_discovers_the_pinned_rules_and_hides_the_token(
 ) -> None:
     """The config carries every pinned rule, its exemptions and a hidden token."""
     config = build_config("leynos", Locations(tmp_path, tmp_path), "s3cr3t-token")
-    assert len(config.rules) == len(PLACEMENTS), "one rule per placed package"
+    assert {r.id for r in config.rules} >= set(PLACEMENTS), "every placed package"
     assert "leynos/netsuke" in config.exemptions["nested-cargo-nextest"], "exemptions"
     assert "s3cr3t-token" not in repr(config), "the token must not appear in a repr"
