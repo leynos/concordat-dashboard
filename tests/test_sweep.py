@@ -273,3 +273,22 @@ def test_build_config_discovers_the_pinned_rules_and_hides_the_token(
     assert {r.id for r in config.rules} >= set(PLACEMENTS), "every placed package"
     assert "leynos/netsuke" in config.exemptions["nested-cargo-nextest"], "exemptions"
     assert "s3cr3t-token" not in repr(config), "the token must not appear in a repr"
+
+
+def test_build_config_announces_catalogue_gaps_as_workflow_warnings(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An unplaced rule is visible in the run log, not only on the page."""
+    new = RuleInfo("brand-new-rule", "New", "0.1.0", "NEW RULES", None)
+    monkeypatch.setattr(sweep_module, "discover_rules", lambda _root: (new,))
+    monkeypatch.setattr(sweep_module, "rule_defaults", lambda _rule_id: {})
+    build_config("leynos", Locations(tmp_path, tmp_path), None)
+    lines = capsys.readouterr().err.splitlines()
+    annotations = [line.split("::")[1] for line in lines]
+    assert annotations == [
+        "warning title=Unplaced rule",
+        "warning title=Absent rule",
+    ], "one annotation per gap"
+    assert "'brand-new-rule'" in lines[0], "the new package is named"

@@ -6,7 +6,9 @@ import pytest
 
 from concordat_dashboard.catalogue import (
     PLACEMENTS,
+    ManifestMismatchError,
     ManifestMissingError,
+    catalogue_notices,
     discover_rules,
     exemptions_by_repository,
     read_rule_info,
@@ -34,6 +36,19 @@ def _write_package(root: pathlib.Path, rule_id: str) -> pathlib.Path:
     return package
 
 
+def _package_root(root: pathlib.Path, *rule_ids: str) -> pathlib.Path:
+    """Create one minimal package per id under *root*.
+
+    Returns
+    -------
+    pathlib.Path
+        *root*, now the packages root.
+    """
+    for rule_id in rule_ids:
+        _write_package(root, rule_id)
+    return root
+
+
 def test_every_installed_package_becomes_a_column() -> None:
     """No package the installed concordat ships may be dropped from the coupon."""
     installed = {
@@ -56,25 +71,38 @@ def test_each_block_is_one_run_of_adjacent_columns() -> None:
     assert len(runs) == len(set(runs)), f"a block is split across columns: {runs}"
 
 
-def test_unknown_package_becomes_a_new_rules_column(
-    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """A package with no placement still appears, and the run says so."""
-    package = _write_package(tmp_path, "brand-new-rule")
-    info = read_rule_info(package)
+def test_unknown_package_becomes_a_new_rules_column(tmp_path: pathlib.Path) -> None:
+    """A package with no placement still appears, judged against every repository."""
+    info = read_rule_info(_write_package(tmp_path, "brand-new-rule"))
     assert (info.block, info.applies_to) == ("NEW RULES", None), "unplaced column"
-    err = capsys.readouterr().err
-    assert "::warning title=Unplaced rule::" in err, "a workflow annotation"
-    assert "brand-new-rule" in err, "the annotation names the package"
+
+
+def test_unknown_package_is_noticed(tmp_path: pathlib.Path) -> None:
+    """The catalogue reports an unplaced package; it does not print anything."""
+    rules = discover_rules(
+        _package_root(tmp_path, "uv-gate-baseline", "brand-new-rule")
+    )
+    notices = catalogue_notices(rules)
+    unplaced = [n for n in notices if n.title == "Unplaced rule"]
+    assert [n.message.split("'")[1] for n in unplaced] == ["brand-new-rule"], "named"
+
+
+def test_a_manifest_naming_another_rule_is_refused(tmp_path: pathlib.Path) -> None:
+    """A copied id would shadow the placed package's column."""
+    package = _write_package(tmp_path, "brand-new-rule")
+    (package / "rule.yaml").write_text(
+        "id: uv-gate-baseline\nname: Imposter\nversion: 0.2.0\n", "utf-8"
+    )
+    with pytest.raises(ManifestMismatchError, match="brand-new-rule"):
+        discover_rules(tmp_path)
 
 
 def test_unknown_packages_follow_the_declared_ones_by_id(
     tmp_path: pathlib.Path,
 ) -> None:
     """New rules sort after every declared column, in a stable order."""
-    for rule_id in ("zzz-new", "uv-gate-baseline", "aaa-new", "yaml-lint-baseline"):
-        _write_package(tmp_path, rule_id)
-    rules = discover_rules(tmp_path)
+    ids = ("zzz-new", "uv-gate-baseline", "aaa-new", "yaml-lint-baseline")
+    rules = discover_rules(_package_root(tmp_path, *ids))
     assert [r.id for r in rules] == [
         "uv-gate-baseline",
         "yaml-lint-baseline",
@@ -96,14 +124,20 @@ def test_a_stray_directory_is_not_a_rule_package(tmp_path: pathlib.Path) -> None
     assert not discover_rules(tmp_path), "nothing but a stray directory"
 
 
-def test_missing_declared_package_is_dropped_with_a_warning(
-    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+def test_missing_declared_package_is_dropped_and_noticed(
+    tmp_path: pathlib.Path,
 ) -> None:
-    """A declared package that concordat no longer ships is dropped, loudly."""
-    _write_package(tmp_path, "uv-gate-baseline")
-    rules = discover_rules(tmp_path)
+    """A declared package that concordat no longer ships is dropped, with a notice."""
+    rules = discover_rules(_package_root(tmp_path, "uv-gate-baseline"))
     assert [r.id for r in rules] == ["uv-gate-baseline"], "only what is shipped"
-    assert "::warning title=Absent rule::" in capsys.readouterr().err, "annotation"
+    absent = [n for n in catalogue_notices(rules) if n.title == "Absent rule"]
+    assert len(absent) == 1, "one notice for the dropped packages"
+    assert "yaml-lint-baseline" in absent[0].message, "the dropped package is named"
+
+
+def test_a_complete_catalogue_has_no_notices() -> None:
+    """When concordat and PLACEMENTS agree there is nothing to announce."""
+    assert not catalogue_notices(discover_rules(packages_root())), "no gaps"
 
 
 def test_rule_info_reads_manifest_and_placement(tmp_path: pathlib.Path) -> None:

@@ -62,8 +62,12 @@ The catalogue changes from refusal to visibility:
 - a declared package that concordat no longer ships is dropped with an "Absent
   rule" warning, and the packages root is found without depending on any one
   rule; and
-- a directory with a `policy` but no `rule.yaml` stops the run, because
-  concordat can run it and omitting it would hide a rule.
+- a directory with a `policy` but no `rule.yaml`, or a manifest whose id is not
+  its directory's name, stops the run, because concordat can run the package
+  and a copied id would shadow another column.
+
+The catalogue only reports these gaps (`catalogue_notices`); the sweep prints
+them as workflow warnings.
 
 ## Known risks and limitations
 

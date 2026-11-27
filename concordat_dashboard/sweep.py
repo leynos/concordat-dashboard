@@ -8,12 +8,17 @@ import datetime as dt
 import functools
 import logging
 import pathlib
+import sys
 import tempfile
 import time
 import typing as typ
 
 from . import model
-from .catalogue import discover_rules, exemptions_by_repository
+from .catalogue import (
+    catalogue_notices,
+    discover_rules,
+    exemptions_by_repository,
+)
 from .checkout import checkout_tree, local_ref, origin_url
 from .classify import RawFinding, derive_cell
 from .model import Cell, Exemption, Finding, RepoResult, RuleInfo, State, Sweep
@@ -30,6 +35,7 @@ from .traits import detect_traits
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
+    from .catalogue import Notice
     from .estate import Estate
 
 LOG = logging.getLogger(__name__)
@@ -190,6 +196,12 @@ def sweep_repository(name: str, config: SweepConfig) -> RepoResult:
     return RepoResult(name, sha, traits, cells)
 
 
+def _announce(notices: cabc.Iterable[Notice]) -> None:
+    """Raise each catalogue notice as a workflow warning on stderr."""
+    for notice in notices:
+        sys.stderr.write(f"::warning title={notice.title}::{notice.message}\n")
+
+
 def build_config(
     owner: str, locations: Locations, token: str | None = None
 ) -> SweepConfig:
@@ -210,6 +222,7 @@ def build_config(
         Settings ready to hand to workers.
     """
     rules = discover_rules(packages_root())
+    _announce(catalogue_notices(rules))
     exemptions = {
         rule.id: exemptions_by_repository(rule_defaults(rule.id)) for rule in rules
     }
