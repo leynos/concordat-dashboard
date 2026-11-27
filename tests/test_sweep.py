@@ -280,11 +280,16 @@ def test_build_config_announces_catalogue_gaps_as_workflow_warnings(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """An unplaced rule is visible in the run log, not only on the page."""
-    new = RuleInfo("brand-new-rule", "New", "0.1.0", "NEW RULES", None)
-    monkeypatch.setattr(sweep_module, "discover_rules", lambda _root: (new,))
+    """A root holding only a new rule still configures it, and says what is off."""
+    root = tmp_path / "packages"
+    (root / "brand-new-rule").mkdir(parents=True)
+    (root / "brand-new-rule" / "rule.yaml").write_text(
+        "id: brand-new-rule\nname: New\nversion: 0.1.0\n", "utf-8"
+    )
+    monkeypatch.setattr(sweep_module, "packages_root", lambda: root)
     monkeypatch.setattr(sweep_module, "rule_defaults", lambda _rule_id: {})
-    build_config("leynos", Locations(tmp_path, tmp_path), None)
+    config = build_config("leynos", Locations(tmp_path, tmp_path), None)
+    assert [r.id for r in config.rules] == ["brand-new-rule"], "the new rule is run"
     lines = capsys.readouterr().err.splitlines()
     annotations = [line.split("::")[1] for line in lines]
     assert annotations == [
