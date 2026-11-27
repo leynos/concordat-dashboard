@@ -115,3 +115,27 @@ def test_render_of_a_missing_sweep_file_fails(tmp_path: pathlib.Path) -> None:
             result_action="return_value",
         )
     assert not (tmp_path / "site").exists(), "no site is written"
+
+
+def _concordat_command(monkeypatch: pytest.MonkeyPatch, commit: str) -> None:
+    """Run `concordat` as if the installed concordat had *commit*."""
+    monkeypatch.setattr(cli, "concordat_identity", lambda: ("0.1.0", commit))
+    cli.app(["concordat"], result_action="return_value")
+
+
+def test_concordat_prints_the_commit_that_supplies_the_rules(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`concordat` names the version and full commit the sweep will use."""
+    _concordat_command(monkeypatch, "c" * 40)
+    assert capsys.readouterr().out == f"concordat 0.1.0 @ {'c' * 40}\n", "one line"
+
+
+def test_concordat_without_a_commit_fails(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A concordat with no git identity must stop the run, not be published."""
+    with pytest.raises(SystemExit) as stopped:
+        _concordat_command(monkeypatch, "unknown")
+    assert stopped.value.code == 1, "a failing exit status"
+    assert "::error title=Unknown concordat::" in capsys.readouterr().err, "annotated"

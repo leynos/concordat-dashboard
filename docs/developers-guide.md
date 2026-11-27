@@ -10,12 +10,27 @@ are derived the way they are.
 
 ### Adding or bumping a concordat rule
 
-Concordat is a git dependency pinned to one commit in `pyproject.toml`. After
-bumping the SHA, run `make test`: `tests/test_catalogue.py` fails when the
-pinned concordat ships a rule package that `PLACEMENTS` in
-`concordat_dashboard/catalogue.py` does not place, or no longer ships one it
-does. Add the package to `PLACEMENTS` with its block and the trait it is about
-(`None` for any repository), in the column order wanted on the page.
+Concordat is a git dependency pinned to one commit in `pyproject.toml`. That
+pin is the floor for tests and local builds; the published coupon never uses
+it, because the scheduled workflow sets `CONCORDAT_REF=main` and `make` then
+installs that ref over the locked environment (`make concordat-ref`), so every
+run sweeps with concordat's latest main. Set `CONCORDAT_REF` to any branch, tag
+or commit to reproduce a run locally, for example
+`make site CONCORDAT_REF=main`; leave it unset to use the pin. An unreachable
+ref fails the build; there is no fallback to the pin. `make concordat-ref`
+prints the version and commit it installed, and the workflow records the same
+line in its job summary. That line comes from `concordat-dashboard concordat`,
+which reports the installed concordat's version and commit and exits with
+status 1 when the commit is unknown (concordat not installed from git). The
+decision is recorded in [ADR 002](adrs/adr-0002-sweep-with-concordat-main.md).
+
+A rule package that `PLACEMENTS` in `concordat_dashboard/catalogue.py` does not
+place still becomes a column, under the `NEW RULES` block, and the run raises
+an "Unplaced rule" workflow warning. A declared package that concordat no
+longer ships is dropped with an "Absent rule" warning. Act on either warning by
+adding the package to `PLACEMENTS` with its block and the trait it is about
+(`None` for any repository), in the column order wanted on the page, or by
+removing the stale entry. After bumping the pinned SHA, run `make test`.
 
 ### Unproven findings
 
@@ -41,6 +56,8 @@ pinned Tailwind CLI, installed by `make css` with
 
 - `make sweep` writes `.work/sweep.json` from local clones under `LOCAL_ROOT`;
   an empty `LOCAL_ROOT` fetches from GitHub instead;
+- `make concordat-ref` installs concordat at `CONCORDAT_REF` (a no-op when
+  unset); `sweep` and `render` depend on it;
 - `make css` compiles `assets/coupon.css` and copies `assets/fonts` into
   `site/`;
 - `make render` renders the sweep file into `site/`; and
@@ -56,14 +73,14 @@ repository finishes unless `--keep-trees` is set.
 `.github/workflows/pages.yml` runs daily and on demand on a GitHub-hosted
 runner. The build job has read-only permissions: it installs the tools
 (makeutil is checked against its pinned SHA-256 digest), restores the
-action-pin cache, runs `make site LOCAL_ROOT=` and uploads `site/`. The deploy
-job alone holds `pages: write` and `id-token: write`. Every action is pinned to
-a full commit SHA, and `tests/test_pages_workflow.py` checks that boundary. The
-job summary records the REST budget before and after the sweep, so a rise in
-lookups shows there first. A cold pin cache costs about 750 REST calls; a warm
-one close to none. Set the `PRIVATE_REPOSITORY_COUNT` repository variable to
-show the count of private repositories, which a repository-scoped token cannot
-see.
+action-pin cache, runs `make site LOCAL_ROOT=` with `CONCORDAT_REF=main` and
+uploads `site/`. The deploy job alone holds `pages: write` and
+`id-token: write`. Every action is pinned to a full commit SHA, and
+`tests/test_pages_workflow.py` checks that boundary. The job summary records
+the REST budget before and after the sweep, so a rise in lookups shows there
+first. A cold pin cache costs about 750 REST calls; a warm one close to none.
+Set the `PRIVATE_REPOSITORY_COUNT` repository variable to show the count of
+private repositories, which a repository-scoped token cannot see.
 
 ### Diagnostics
 

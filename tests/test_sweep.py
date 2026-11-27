@@ -270,6 +270,30 @@ def test_build_config_discovers_the_pinned_rules_and_hides_the_token(
 ) -> None:
     """The config carries every pinned rule, its exemptions and a hidden token."""
     config = build_config("leynos", Locations(tmp_path, tmp_path), "s3cr3t-token")
-    assert len(config.rules) == len(PLACEMENTS), "one rule per placed package"
+    assert {r.id for r in config.rules} >= set(PLACEMENTS), "every placed package"
     assert "leynos/netsuke" in config.exemptions["nested-cargo-nextest"], "exemptions"
     assert "s3cr3t-token" not in repr(config), "the token must not appear in a repr"
+
+
+def test_build_config_announces_catalogue_gaps_as_workflow_warnings(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A root holding only a new rule still configures it, and says what is off."""
+    root = tmp_path / "packages"
+    (root / "brand-new-rule").mkdir(parents=True)
+    (root / "brand-new-rule" / "rule.yaml").write_text(
+        "id: brand-new-rule\nname: New\nversion: 0.1.0\n", "utf-8"
+    )
+    monkeypatch.setattr(sweep_module, "packages_root", lambda: root)
+    monkeypatch.setattr(sweep_module, "rule_defaults", lambda _rule_id: {})
+    config = build_config("leynos", Locations(tmp_path, tmp_path), None)
+    assert [r.id for r in config.rules] == ["brand-new-rule"], "the new rule is run"
+    lines = capsys.readouterr().err.splitlines()
+    annotations = [line.split("::")[1] for line in lines]
+    assert annotations == [
+        "warning title=Unplaced rule",
+        "warning title=Absent rule",
+    ], "one annotation per gap"
+    assert "'brand-new-rule'" in lines[0], "the new package is named"

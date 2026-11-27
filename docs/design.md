@@ -23,26 +23,34 @@ The sweep runs in four stages:
 The sweep is written to `sweep.json` and published beside the pages, so the
 rendering can be re-run without sweeping again.
 
+The rules come from concordat's current main on a published run
+(`CONCORDAT_REF=main`) and from the pinned commit otherwise; see
+[ADR 002](adrs/adr-0002-sweep-with-concordat-main.md). The `catalogue` places
+each package it knows by block and applicability. A package it does not know
+becomes a column under a `NEW RULES` block with an "Unplaced rule" warning, a
+declared package that concordat no longer ships is dropped with an "Absent
+rule" warning, and a policy directory with no manifest stops the run.
+
 ## Modules
 
-| Module      | Responsibility                                             |
-| ----------- | ---------------------------------------------------------- |
-| `model`     | Frozen value types: `Sweep`, `RepoResult`, `Cell`, `State` |
-| `catalogue` | Block and applicability of each rule; exemption index      |
-| `estate`    | Repository listing and exclusion counts                    |
-| `checkout`  | Default-branch checkout with the right `origin`            |
-| `traits`    | Rust, Python and uv detection                              |
-| `process`   | The `git` and `gh` allowlist, deadlines, safe summaries    |
-| `redact`    | Strips credentials from text before it is logged           |
-| `runner`    | In-process concordat runner with a shared certifier        |
-| `classify`  | The five-state decision and the unproven-finding rule      |
-| `sweep`     | Orchestration across a process pool                        |
-| `serialize` | `sweep.json` reading and writing                           |
-| `view`      | Counts, ordering and block grouping for the coupon         |
-| `marks`     | Glyph, wording and link for one mark                       |
-| `detail`    | The per-repository page view                               |
-| `render`    | Jinja environment and site writer                          |
-| `cli`       | `sweep` and `render` commands                              |
+| Module      | Responsibility                                                |
+| ----------- | ------------------------------------------------------------- |
+| `model`     | Frozen value types: `Sweep`, `RepoResult`, `Cell`, `State`    |
+| `catalogue` | Block and applicability of each rule; `NEW RULES`; exemptions |
+| `estate`    | Repository listing and exclusion counts                       |
+| `checkout`  | Default-branch checkout with the right `origin`               |
+| `traits`    | Rust, Python and uv detection                                 |
+| `process`   | The `git` and `gh` allowlist, deadlines, safe summaries       |
+| `redact`    | Strips credentials from text before it is logged              |
+| `runner`    | In-process concordat runner with a shared certifier           |
+| `classify`  | The five-state decision and the unproven-finding rule         |
+| `sweep`     | Orchestration across a process pool                           |
+| `serialize` | `sweep.json` reading and writing                              |
+| `view`      | Counts, ordering and block grouping for the coupon            |
+| `marks`     | Glyph, wording and link for one mark                          |
+| `detail`    | The per-repository page view                                  |
+| `render`    | Jinja environment and site writer                             |
+| `cli`       | `sweep`, `render` and `concordat` commands                    |
 
 _Table 1: Modules in `concordat_dashboard`._
 

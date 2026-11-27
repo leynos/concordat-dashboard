@@ -3,8 +3,13 @@
 Concordat reports only compliant, non-compliant or indeterminate, so the
 coupon's "not applicable" and "exempt" marks are derived here from two
 declared facts: which repositories a rule is about, and which exemptions the
-rule package ships. A package this table does not know is refused, so a new
-rule cannot be dropped from the coupon silently.
+rule package ships. The sweep installs concordat's main on every run, so a rule
+can arrive before this table knows it: such a package still becomes a column,
+in the `NEW RULES` block and judged against every repository, and
+`catalogue_notices` asks for a placement. A declared package that concordat no
+longer ships is dropped, with a notice. Neither case fails the run, because a
+coupon with a missing rule would be worse than a plain column. The catalogue
+only reports; the sweep decides how to announce the notices.
 """
 
 import dataclasses
@@ -38,7 +43,9 @@ PLACEMENTS: typ.Final[dict[str, Placement]] = {
     "rust-test-environment": Placement("RUST BUILD", Trait.RUST),
     "rust-toolchain-policy": Placement("RUST BUILD", Trait.RUST),
     "whitaker-provisioning": Placement("RUST BUILD", Trait.RUST),
+    "gate-workspace-coverage": Placement("RUST BUILD", Trait.RUST),
     "nested-cargo-ci-wiring": Placement("NESTED CARGO", Trait.RUST),
+    "nested-cargo-cold-build": Placement("NESTED CARGO", Trait.RUST),
     "nested-cargo-fixture-lockfiles": Placement("NESTED CARGO", Trait.RUST),
     "nested-cargo-fixture-manifests": Placement("NESTED CARGO", Trait.RUST),
     "nested-cargo-nextest": Placement("NESTED CARGO", Trait.RUST),
@@ -49,13 +56,58 @@ PLACEMENTS: typ.Final[dict[str, Placement]] = {
     "documentation-presence": Placement("PYTHON", None),
     "main-owned-codescene-coverage": Placement("HOUSE RULES", None),
     "markdown-formatting-baseline": Placement("HOUSE RULES", None),
+    "pr-run-cancellation": Placement("HOUSE RULES", None),
     "spelling-config-baseline": Placement("HOUSE RULES", None),
     "yaml-lint-baseline": Placement("HOUSE RULES", None),
 }
 
 
-class UnknownPackageError(LookupError):
-    """A concordat rule package has no place on the coupon."""
+UNPLACED: typ.Final = Placement("NEW RULES", None)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Notice:
+    """A gap between concordat's packages and the placements, for the run log."""
+
+    title: str
+    message: str
+
+
+class ManifestMissingError(RuntimeError):
+    """A directory with a policy has no manifest, so it cannot be described."""
+
+
+class ManifestMismatchError(RuntimeError):
+    """A manifest names a different rule from its directory.
+
+    Concordat resolves a rule by directory name, so a manifest that claims
+    another package's id would shadow that package's column.
+    """
+
+
+def _is_rule_package(path: pathlib.Path) -> bool:
+    """Tell a rule package from a stray entry, refusing one that has no manifest.
+
+    Concordat can run a package that has a `policy` directory whether or not it
+    has a manifest, so skipping one here would drop a rule from the coupon with
+    no trace. Failing the run is the visible alternative.
+
+    Returns
+    -------
+    bool
+        True for a package with a manifest; False for a stray entry.
+
+    Raises
+    ------
+    ManifestMissingError
+        If *path* has a `policy` directory but no `rule.yaml`.
+    """
+    if (path / "rule.yaml").is_file():
+        return True
+    if (path / "policy").is_dir():
+        message = f"rule package {path.name!r} has a policy but no rule.yaml"
+        raise ManifestMissingError(message)
+    return False
 
 
 def read_rule_info(package_dir: pathlib.Path) -> RuleInfo:
@@ -73,15 +125,21 @@ def read_rule_info(package_dir: pathlib.Path) -> RuleInfo:
 
     Raises
     ------
-    UnknownPackageError
-        If the package is not in `PLACEMENTS`.
+    ManifestMismatchError
+        If the manifest's `id` is not the directory's name.
+
+    Notes
+    -----
+    A package not in `PLACEMENTS` is placed in the `NEW RULES` block.
     """
     manifest = yaml.safe_load((package_dir / "rule.yaml").read_text("utf-8"))
-    try:
-        placement = PLACEMENTS[manifest["id"]]
-    except KeyError as error:
-        message = f"rule package {manifest['id']!r} has no placement in PLACEMENTS"
-        raise UnknownPackageError(message) from error
+    if manifest["id"] != package_dir.name:
+        message = (
+            f"rule package directory {package_dir.name!r} has a manifest for"
+            f" {manifest['id']!r}"
+        )
+        raise ManifestMismatchError(message)
+    placement = PLACEMENTS.get(manifest["id"], UNPLACED)
     return RuleInfo(
         id=manifest["id"],
         name=manifest["name"],
@@ -102,24 +160,49 @@ def discover_rules(packages_root: pathlib.Path) -> tuple[RuleInfo, ...]:
     Returns
     -------
     tuple[RuleInfo, ...]
-        One column per package, ordered as `PLACEMENTS` orders them.
-
-    Raises
-    ------
-    UnknownPackageError
-        If a package is unknown, or a declared package is missing.
+        One column per package: those `PLACEMENTS` declares in its order, then
+        any package it does not know, by id.
     """
     found = {
         info.id: info
         for path in sorted(packages_root.iterdir())
-        if (path / "rule.yaml").is_file()
+        if _is_rule_package(path)
         for info in [read_rule_info(path)]
     }
-    missing = PLACEMENTS.keys() - found.keys()
-    if missing:
-        message = f"declared rule packages are absent: {sorted(missing)}"
-        raise UnknownPackageError(message)
-    return tuple(found[rule_id] for rule_id in PLACEMENTS)
+    declared = [found[rule_id] for rule_id in PLACEMENTS if rule_id in found]
+    new = [found[rule_id] for rule_id in sorted(found.keys() - PLACEMENTS.keys())]
+    return tuple(declared + new)
+
+
+def catalogue_notices(rules: cabc.Iterable[RuleInfo]) -> tuple[Notice, ...]:
+    """Name the packages that do not match `PLACEMENTS`.
+
+    Parameters
+    ----------
+    rules
+        The columns `discover_rules` found.
+
+    Returns
+    -------
+    tuple[Notice, ...]
+        An "Unplaced rule" notice for each package shown under `NEW RULES`, and
+        one "Absent rule" notice naming every declared package that concordat
+        no longer ships; empty when the two agree.
+    """
+    ids = {rule.id for rule in rules}
+    unplaced = [
+        Notice(
+            "Unplaced rule",
+            f"rule package {rule_id!r} has no placement in PLACEMENTS;"
+            " shown under NEW RULES",
+        )
+        for rule_id in sorted(ids - PLACEMENTS.keys())
+    ]
+    absent = sorted(PLACEMENTS.keys() - ids)
+    gone = [
+        Notice("Absent rule", f"declared rule packages are no longer shipped: {absent}")
+    ]
+    return tuple(unplaced + (gone if absent else []))
 
 
 def exemptions_by_repository(

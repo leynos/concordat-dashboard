@@ -6,6 +6,10 @@ Accepted: 2026-11-16. The coupon derives five marks from concordat's three
 verdicts, runs concordat in process at a pinned commit, publishes one detail
 page per repository, and runs on GitHub-hosted runners.
 
+Amended by ADR-0002 (2026-11-27): the published coupon sweeps with concordat's
+current main, and the catalogue shows an unknown rule instead of refusing it.
+See [Amendments](#amendments).
+
 ## Date
 
 2026-11-16.
@@ -99,3 +103,13 @@ GitHub-hosted runners builds the site and deploys it with GitHub Pages.
   omitted.
 - Whitaker certification and pin lookups use the Actions token's REST budget; a
   lookup that fails marks the affected cells indeterminate with the reason.
+
+## Amendments
+
+### 2026-11-27: ADR 002
+
+The decision above (a git dependency at one commit, and a catalogue that
+refuses an unknown package) is kept as history. It now describes the floor for
+tests and local builds only. The published coupon sweeps with concordat's
+current main, and an unknown package becomes a `NEW RULES` column with a
+warning; see [ADR 002](adr-0002-sweep-with-concordat-main.md).

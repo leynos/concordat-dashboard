@@ -1,6 +1,7 @@
 """The runner turns concordat's results, and its failures, into raw findings."""
 
 import shutil
+import types
 import typing as typ
 
 import pytest
@@ -98,6 +99,29 @@ def test_concordat_identity_reports_the_pinned_commit() -> None:
     version, commit = concordat_identity()
     assert version, "concordat has a version"
     assert len(commit) == 40, "the pinned commit is a full SHA"
+
+
+@pytest.mark.parametrize(
+    "direct_url",
+    [None, "{}", '{"url": "file:///somewhere"}'],
+    ids=["no-file", "empty", "not-vcs"],
+)
+def test_concordat_identity_without_a_git_commit_is_unknown(
+    monkeypatch: pytest.MonkeyPatch, direct_url: str | None
+) -> None:
+    """A concordat not installed from git has no commit to claim."""
+    # `direct_url` is None when the distribution has no `direct_url.json`.
+    dist = types.SimpleNamespace(version="9.9.9", read_text=lambda _n: direct_url)
+    monkeypatch.setattr(
+        runner_module.importlib.metadata, "distribution", lambda _name: dist
+    )
+    assert concordat_identity() == ("9.9.9", runner_module.UNKNOWN_COMMIT), "unknown"
+
+
+def test_the_packages_root_is_where_concordat_resolves_its_packages() -> None:
+    """The root is concordat's own, not derived from any one rule being present."""
+    package = runner_module.rule_package_dir("uv-gate-baseline")
+    assert runner_module.packages_root() == package.parent, "the shared parent"
 
 
 def test_a_missing_token_is_announced_as_a_workflow_warning(

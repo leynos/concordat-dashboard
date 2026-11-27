@@ -22,6 +22,9 @@ from concordat.rules.github_whitaker_certification import (
     github_certifier,
 )
 from concordat.rules.packages import (
+    _rule_packages_dir as concordat_packages_dir,
+)
+from concordat.rules.packages import (
     default_envelope_builder,
     resolving_pins,
     rule_package_dir,
@@ -40,6 +43,7 @@ if typ.TYPE_CHECKING:
 LOG = logging.getLogger(__name__)
 API_URL = "https://api.github.com"
 INDETERMINATE = "indeterminate"
+UNKNOWN_COMMIT = "unknown"
 
 
 def github_token() -> str | None:
@@ -86,7 +90,7 @@ def concordat_identity() -> tuple[str, str]:
     """
     dist = importlib.metadata.distribution("concordat")
     raw = dist.read_text("direct_url.json") or "{}"
-    commit = json.loads(raw).get("vcs_info", {}).get("commit_id", "unknown")
+    commit = json.loads(raw).get("vcs_info", {}).get("commit_id", UNKNOWN_COMMIT)
     return dist.version, commit
 
 
@@ -113,8 +117,15 @@ def packages_root() -> pathlib.Path:
     -------
     pathlib.Path
         The parent of every rule package directory.
+
+    Notes
+    -----
+    This asks concordat for its root directly instead of deriving it from one
+    package, because main may drop any rule (or all the declared ones) and that
+    must not stop discovery. The function is private to concordat; ADR 001
+    accepts that coupling to its internals, which the pinned tests exercise.
     """
-    return rule_package_dir("yaml-lint-baseline").parent
+    return concordat_packages_dir()
 
 
 class Runner:

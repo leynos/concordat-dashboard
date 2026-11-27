@@ -28,6 +28,10 @@ jobs:
       MAKEUTIL_VERSION: "0.1.2"
       MAKEUTIL_ASSET: "makeutil-x86_64-unknown-linux-musl"
       MAKEUTIL_SHA256: "688c3385ac2f5cb630e8a0ffe640815f366793195d35e89821b918b09531adf8"
+      # Every run sweeps with concordat's main, not the commit pinned for
+      # tests: `make` installs this ref over the locked environment, and an
+      # unreachable or broken main fails the run rather than reusing the pin.
+      CONCORDAT_REF: main
       GH_TOKEN: ${{ github.token }}
       GITHUB_TOKEN: ${{ github.token }}
       # A repository-scoped token cannot see private repositories, so their
@@ -98,6 +102,13 @@ jobs:
         run: |
           remaining=$(gh api rate_limit --jq .resources.core.remaining)
           echo "REST remaining after: ${remaining}" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Record the concordat commit swept
+        # The coupon footer carries the same commit; the summary makes it
+        # visible without opening the page.
+        run: |
+          set -euo pipefail
+          uv run --no-sync concordat-dashboard concordat | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Configure Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0

@@ -19,6 +19,9 @@ below.
   the accessibility and styling approach.
 - [ADR 001: Coupon marks and sweep shape](adrs/adr-0001-coupon-marks-and-sweep-shape.md)
   records how the five marks are derived and where the sweep runs.
+- [ADR 002: Sweep with concordat main](adrs/adr-0002-sweep-with-concordat-main.md)
+  records why the published coupon sweeps with concordat's current main and how
+  an unknown rule is handled.
 
 ## Engineering practice
 
