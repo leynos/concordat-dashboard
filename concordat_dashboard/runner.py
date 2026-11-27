@@ -15,12 +15,14 @@ import sys
 import typing as typ
 
 from concordat.auditor.github import GithubClient
-from concordat.errors import OperationalRuleError
 from concordat.rules import run_rule
 from concordat.rules.github_pins import GithubPinResolver
 from concordat.rules.github_whitaker_certification import (
     GithubCertifier,
     github_certifier,
+)
+from concordat.rules.packages import (
+    _rule_packages_dir as concordat_packages_dir,
 )
 from concordat.rules.packages import (
     default_envelope_builder,
@@ -31,7 +33,6 @@ from concordat.rules.packages import (
 from concordat.rules.pin_cache import PinCache, cached_resolver
 from concordat.rules.provisioning_certification import certifying
 
-from .catalogue import PLACEMENTS
 from .classify import RawFinding
 from .process import CommandFailedError, gh
 
@@ -119,17 +120,12 @@ def packages_root() -> pathlib.Path:
 
     Notes
     -----
-    Any one declared package being absent is tolerated, because main may drop a
-    rule and that must not stop publication. Only when concordat ships none of
-    them is the last `OperationalRuleError` re-raised.
+    This asks concordat for its root directly instead of deriving it from one
+    package, because main may drop any rule (or all the declared ones) and that
+    must not stop discovery. The function is private to concordat; ADR 001
+    accepts that coupling to its internals, which the pinned tests exercise.
     """
-    errors: list[OperationalRuleError] = []
-    for rule_id in PLACEMENTS:
-        try:
-            return rule_package_dir(rule_id).parent
-        except OperationalRuleError as error:
-            errors.append(error)
-    raise errors[-1]
+    return concordat_packages_dir()
 
 
 class Runner:

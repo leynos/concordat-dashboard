@@ -124,15 +124,20 @@ def test_a_stray_directory_is_not_a_rule_package(tmp_path: pathlib.Path) -> None
     assert not discover_rules(tmp_path), "nothing but a stray directory"
 
 
-def test_missing_declared_package_is_dropped_and_noticed(
-    tmp_path: pathlib.Path,
+@pytest.mark.parametrize(
+    "shipped",
+    [("uv-gate-baseline",), ("brand-new-rule",)],
+    ids=["most-declared-dropped", "every-declared-dropped"],
+)
+def test_missing_declared_packages_are_dropped_and_noticed(
+    tmp_path: pathlib.Path, shipped: tuple[str, ...]
 ) -> None:
-    """A declared package that concordat no longer ships is dropped, with a notice."""
-    rules = discover_rules(_package_root(tmp_path, "uv-gate-baseline"))
-    assert [r.id for r in rules] == ["uv-gate-baseline"], "only what is shipped"
+    """Declared packages concordat no longer ships are dropped, with a notice."""
+    rules = discover_rules(_package_root(tmp_path, *shipped))
+    assert [r.id for r in rules] == list(shipped), "only what is shipped"
     absent = [n for n in catalogue_notices(rules) if n.title == "Absent rule"]
     assert len(absent) == 1, "one notice for the dropped packages"
-    assert "yaml-lint-baseline" in absent[0].message, "the dropped package is named"
+    assert "yaml-lint-baseline" in absent[0].message, "a dropped package is named"
 
 
 def test_a_complete_catalogue_has_no_notices() -> None:

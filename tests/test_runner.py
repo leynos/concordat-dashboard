@@ -118,34 +118,10 @@ def test_concordat_identity_without_a_git_commit_is_unknown(
     assert concordat_identity() == ("9.9.9", runner_module.UNKNOWN_COMMIT), "unknown"
 
 
-def test_the_packages_root_survives_one_rule_being_dropped(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Concordat dropping one rule must not stop the root being found."""
-    real = runner_module.rule_package_dir
-
-    def drop_yaml_lint(rule_id: str) -> pathlib.Path:
-        """Resolve packages as concordat does, except the one dropped.
-
-        Returns
-        -------
-        pathlib.Path
-            The package directory.
-
-        Raises
-        ------
-        OperationalRuleError
-            For `yaml-lint-baseline`, as if it were absent.
-        """
-        if rule_id == "yaml-lint-baseline":
-            message = "unknown rule package 'yaml-lint-baseline'"
-            raise runner_module.OperationalRuleError(
-                message, operation="load-rule-package"
-            )
-        return real(rule_id)
-
-    monkeypatch.setattr(runner_module, "rule_package_dir", drop_yaml_lint)
-    assert runner_module.packages_root() == real("uv-gate-baseline").parent, "root"
+def test_the_packages_root_is_where_concordat_resolves_its_packages() -> None:
+    """The root is concordat's own, not derived from any one rule being present."""
+    package = runner_module.rule_package_dir("uv-gate-baseline")
+    assert runner_module.packages_root() == package.parent, "the shared parent"
 
 
 def test_a_missing_token_is_announced_as_a_workflow_warning(
