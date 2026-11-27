@@ -2,8 +2,11 @@
 
 import typing as typ
 
+import pytest
+
 from concordat_dashboard.catalogue import (
     PLACEMENTS,
+    ManifestMissingError,
     discover_rules,
     exemptions_by_repository,
     read_rule_info,
@@ -13,8 +16,6 @@ from concordat_dashboard.runner import packages_root, rule_defaults
 
 if typ.TYPE_CHECKING:
     import pathlib
-
-    import pytest
 
 
 def _write_package(root: pathlib.Path, rule_id: str) -> pathlib.Path:
@@ -80,6 +81,19 @@ def test_unknown_packages_follow_the_declared_ones_by_id(
         "aaa-new",
         "zzz-new",
     ], "declared first, then new rules by id"
+
+
+def test_a_policy_without_a_manifest_is_refused(tmp_path: pathlib.Path) -> None:
+    """Concordat can run such a package, so omitting it would hide a rule."""
+    (tmp_path / "manifestless" / "policy").mkdir(parents=True)
+    with pytest.raises(ManifestMissingError, match="manifestless"):
+        discover_rules(tmp_path)
+
+
+def test_a_stray_directory_is_not_a_rule_package(tmp_path: pathlib.Path) -> None:
+    """Only a manifest or a policy makes a directory a package."""
+    (tmp_path / "__pycache__").mkdir()
+    assert not discover_rules(tmp_path), "nothing but a stray directory"
 
 
 def test_missing_declared_package_is_dropped_with_a_warning(

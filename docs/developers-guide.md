@@ -19,7 +19,10 @@ or commit to reproduce a run locally, for example
 `make site CONCORDAT_REF=main`; leave it unset to use the pin. An unreachable
 ref fails the build; there is no fallback to the pin. `make concordat-ref`
 prints the version and commit it installed, and the workflow records the same
-line in its job summary.
+line in its job summary. That line comes from `concordat-dashboard concordat`,
+which reports the installed concordat's version and commit and exits with
+status 1 when the commit is unknown (concordat not installed from git). The
+decision is recorded in [ADR 002](adrs/adr-0002-sweep-with-concordat-main.md).
 
 A rule package that `PLACEMENTS` in `concordat_dashboard/catalogue.py` does not
 place still becomes a column, under the `NEW RULES` block, and the run raises

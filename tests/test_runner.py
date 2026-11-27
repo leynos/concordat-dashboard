@@ -1,6 +1,7 @@
 """The runner turns concordat's results, and its failures, into raw findings."""
 
 import shutil
+import types
 import typing as typ
 
 import pytest
@@ -98,6 +99,53 @@ def test_concordat_identity_reports_the_pinned_commit() -> None:
     version, commit = concordat_identity()
     assert version, "concordat has a version"
     assert len(commit) == 40, "the pinned commit is a full SHA"
+
+
+@pytest.mark.parametrize(
+    "direct_url",
+    [None, "{}", '{"url": "file:///somewhere"}'],
+    ids=["no-file", "empty", "not-vcs"],
+)
+def test_concordat_identity_without_a_git_commit_is_unknown(
+    monkeypatch: pytest.MonkeyPatch, direct_url: str | None
+) -> None:
+    """A concordat not installed from git has no commit to claim."""
+    # `direct_url` is None when the distribution has no `direct_url.json`.
+    dist = types.SimpleNamespace(version="9.9.9", read_text=lambda _n: direct_url)
+    monkeypatch.setattr(
+        runner_module.importlib.metadata, "distribution", lambda _name: dist
+    )
+    assert concordat_identity() == ("9.9.9", runner_module.UNKNOWN_COMMIT), "unknown"
+
+
+def test_the_packages_root_survives_one_rule_being_dropped(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Concordat dropping one rule must not stop the root being found."""
+    real = runner_module.rule_package_dir
+
+    def drop_yaml_lint(rule_id: str) -> pathlib.Path:
+        """Resolve packages as concordat does, except the one dropped.
+
+        Returns
+        -------
+        pathlib.Path
+            The package directory.
+
+        Raises
+        ------
+        OperationalRuleError
+            For `yaml-lint-baseline`, as if it were absent.
+        """
+        if rule_id == "yaml-lint-baseline":
+            message = "unknown rule package 'yaml-lint-baseline'"
+            raise runner_module.OperationalRuleError(
+                message, operation="load-rule-package"
+            )
+        return real(rule_id)
+
+    monkeypatch.setattr(runner_module, "rule_package_dir", drop_yaml_lint)
+    assert runner_module.packages_root() == real("uv-gate-baseline").parent, "root"
 
 
 def test_a_missing_token_is_announced_as_a_workflow_warning(

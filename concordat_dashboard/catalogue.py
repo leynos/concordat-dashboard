@@ -70,6 +70,35 @@ def _warn(title: str, message: str) -> None:
     sys.stderr.write(f"::warning title={title}::{message}\n")
 
 
+class ManifestMissingError(RuntimeError):
+    """A directory with a policy has no manifest, so it cannot be described."""
+
+
+def _is_rule_package(path: pathlib.Path) -> bool:
+    """Tell a rule package from a stray entry, refusing one that has no manifest.
+
+    Concordat can run a package that has a `policy` directory whether or not it
+    has a manifest, so skipping one here would drop a rule from the coupon with
+    no trace. Failing the run is the visible alternative.
+
+    Returns
+    -------
+    bool
+        True for a package with a manifest; False for a stray entry.
+
+    Raises
+    ------
+    ManifestMissingError
+        If *path* has a `policy` directory but no `rule.yaml`.
+    """
+    if (path / "rule.yaml").is_file():
+        return True
+    if (path / "policy").is_dir():
+        message = f"rule package {path.name!r} has a policy but no rule.yaml"
+        raise ManifestMissingError(message)
+    return False
+
+
 def read_rule_info(package_dir: pathlib.Path) -> RuleInfo:
     """Read one rule package's manifest into a coupon column.
 
@@ -123,7 +152,7 @@ def discover_rules(packages_root: pathlib.Path) -> tuple[RuleInfo, ...]:
     found = {
         info.id: info
         for path in sorted(packages_root.iterdir())
-        if (path / "rule.yaml").is_file()
+        if _is_rule_package(path)
         for info in [read_rule_info(path)]
     }
     missing = PLACEMENTS.keys() - found.keys()

@@ -15,6 +15,7 @@ import sys
 import typing as typ
 
 from concordat.auditor.github import GithubClient
+from concordat.errors import OperationalRuleError
 from concordat.rules import run_rule
 from concordat.rules.github_pins import GithubPinResolver
 from concordat.rules.github_whitaker_certification import (
@@ -30,6 +31,7 @@ from concordat.rules.packages import (
 from concordat.rules.pin_cache import PinCache, cached_resolver
 from concordat.rules.provisioning_certification import certifying
 
+from .catalogue import PLACEMENTS
 from .classify import RawFinding
 from .process import CommandFailedError, gh
 
@@ -114,8 +116,20 @@ def packages_root() -> pathlib.Path:
     -------
     pathlib.Path
         The parent of every rule package directory.
+
+    Notes
+    -----
+    Any one declared package being absent is tolerated, because main may drop a
+    rule and that must not stop publication. Only when concordat ships none of
+    them is the last `OperationalRuleError` re-raised.
     """
-    return rule_package_dir("yaml-lint-baseline").parent
+    errors: list[OperationalRuleError] = []
+    for rule_id in PLACEMENTS:
+        try:
+            return rule_package_dir(rule_id).parent
+        except OperationalRuleError as error:
+            errors.append(error)
+    raise errors[-1]
 
 
 class Runner:

@@ -21,6 +21,12 @@ Results block counts each state across a row, and the totals under the grid
 count them down each column. The Head column holds the commit swept, and the
 footer records the concordat commit that supplied the rules.
 
+The sweep always uses concordat's current main, so a rule can appear before the
+dashboard knows where it belongs. Such a rule still gets a column, under the
+`NEW RULES` heading, judged against every repository, and the run raises an
+"Unplaced rule" warning. A rule the dashboard declares but concordat no longer
+ships is left off, with an "Absent rule" warning.
+
 Excluded from the sweep are forks, archived repositories and empty repositories
 (no commit to fetch); private repositories are never listed, and the page says
 only how many there are when that count is known.
@@ -38,9 +44,17 @@ directory) and write the site to `site/`. The steps are also available alone:
 `make site LOCAL_ROOT=` fetches every repository from GitHub instead, which is
 what the scheduled workflow does. `SWEEP_ARGS` passes extra options to the
 sweep, for example `SWEEP_ARGS="--only whitaker --only cuprum"` to sweep two
-repositories while developing. The sweep needs `conftest` and `makeutil` on
-`PATH` (the rule packages run them) and a GitHub login for `gh` or a
-`GITHUB_TOKEN`.
+repositories while developing. `CONCORDAT_REF` chooses the concordat rules. It
+is empty by default, which uses the commit pinned in `pyproject.toml` and
+`uv.lock`. Set it to any branch, tag or commit, for example
+`make site CONCORDAT_REF=main`, and that ref is installed over the locked
+environment; a ref that cannot be fetched fails the build. `make concordat-ref`
+does only the install, and `uv run concordat-dashboard concordat` prints the
+version and commit in use as `concordat <version> @ <sha>`. It exits with
+status 1 when the installed concordat has no commit identity.
+
+The sweep needs `conftest` and `makeutil` on `PATH` (the rule packages run
+them) and a GitHub login for `gh` or a `GITHUB_TOKEN`.
 
 ## Publication
 
